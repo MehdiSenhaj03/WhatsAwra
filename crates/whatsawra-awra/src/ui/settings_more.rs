@@ -570,8 +570,7 @@ impl Profile {
         self.face.set_text(Some(name.as_str()));
         let picture = app.me.as_deref().and_then(|me| app.avatar_path(me));
         if picture != self.shown_face {
-            let texture = picture.as_deref().and_then(super::pictures::file);
-            self.face.set_custom_image(texture.as_ref());
+            super::pictures::avatar(&self.face, picture.as_deref());
             self.shown_face = picture;
         }
     }
@@ -739,10 +738,7 @@ impl Live for Blocked {
             let line = awra::Box::new(awra::Orientation::Horizontal, 10);
             let face = awra::Avatar::new(32, Some(name));
             if !hidden {
-                let picture = app
-                    .avatar_path(id)
-                    .and_then(|path| super::pictures::file(&path));
-                face.set_custom_image(picture.as_ref());
+                super::pictures::avatar(&face, app.avatar_path(id).as_deref());
             }
             let label = awra::Label::new(Some(name));
             label.set_xalign(0.0);

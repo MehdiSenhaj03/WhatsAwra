@@ -587,10 +587,7 @@ impl Live for Results {
             {
                 let row = awra::Box::new(awra::Orientation::Horizontal, 10);
                 let face = awra::Avatar::new(32, Some(voter.name.as_str()));
-                let picture = app
-                    .avatar_path(&voter.id)
-                    .and_then(|path| super::pictures::file(&path));
-                face.set_custom_image(picture.as_ref());
+                super::pictures::avatar(&face, app.avatar_path(&voter.id).as_deref());
                 let lines = awra::Box::new(awra::Orientation::Vertical, 0);
                 let who = awra::Label::new(Some(&voter.name));
                 who.set_xalign(0.0);

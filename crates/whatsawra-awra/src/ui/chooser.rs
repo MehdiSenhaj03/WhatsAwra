@@ -308,8 +308,7 @@ fn forward_rows(app: &App) -> Vec<Row> {
 pub(super) fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::ToggleButton {
     let line = awra::Box::new(awra::Orientation::Horizontal, 12);
     let face = awra::Avatar::new(36, Some(&row.name));
-    let picture = row.picture.as_deref().and_then(super::pictures::file);
-    face.set_custom_image(picture.as_ref());
+    super::pictures::avatar(&face, row.picture.as_deref());
     line.append(&face);
     let lines = awra::Box::new(awra::Orientation::Vertical, 0);
     lines.set_hexpand(true);

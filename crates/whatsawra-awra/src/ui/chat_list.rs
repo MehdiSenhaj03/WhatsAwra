@@ -45,6 +45,10 @@ struct RowWidgets {
     mute: awra::Image,
     unread: awra::Badge,
     shown: Rc<RefCell<Option<Row>>>,
+    /// Pictures already asked for (shared by every row), so each is asked
+    /// once, and only for rows on screen, as the egui list does.
+    asked: Rc<RefCell<HashSet<String>>>,
+    driver: std::rc::Weak<Driver>,
 }
 
 pub struct ChatList {
@@ -59,8 +63,6 @@ pub struct ChatList {
     rows: Rc<RefCell<Vec<Row>>>,
     empty: awra::EmptyState,
     title: awra::Label,
-    /// Pictures already asked for, so each is asked once.
-    asked: HashSet<String>,
 }
 
 impl ChatList {
@@ -110,12 +112,14 @@ impl ChatList {
         }
         root.append(&chip_row);
 
+        let asked: Rc<RefCell<HashSet<String>>> = Rc::default();
+        let shared = asked.clone();
         let rows: Rc<RefCell<Vec<Row>>> = Rc::default();
         let store = awra::ListStore::new::<awra::StringObject>();
         let factory = awra::SignalListItemFactory::new();
         let weak = Rc::downgrade(driver);
         factory.connect_setup(move |_, item| {
-            let (root, widgets) = row_widgets(&weak);
+            let (root, widgets) = row_widgets(&weak, &shared);
             root.set_rust_data("row", widgets);
             item.set_child(Some(&root));
         });
@@ -185,7 +189,6 @@ impl ChatList {
             rows,
             empty,
             title,
-            asked: HashSet::new(),
         }
     }
 
@@ -206,7 +209,7 @@ impl ChatList {
             .set_visible(app.page == whatsawra::model::Page::Chats);
     }
 
-    pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
+    pub fn sync(&mut self, _driver: &Rc<Driver>, app: &App) {
         if self.search.text() != app.search {
             self.search.set_text(&app.search);
         }
@@ -214,27 +217,15 @@ impl ChatList {
             chip.set_active(app.chat_filter == *filter && app.label_filter.is_none());
         }
 
-        let chats = app.visible_chats();
-        let rows: Vec<Row> = chats.iter().map(|chat| row_of(app, chat)).collect();
-        let mut wanted = Vec::new();
-        for chat in &chats {
-            if app.avatar_path(&chat.id).is_none()
-                && app.avatar_unasked(&chat.id)
-                && self.asked.insert(chat.id.clone())
-            {
-                wanted.push(chat.id.clone());
-            }
-        }
-        if !wanted.is_empty() {
-            driver.later(Op::Edit(Box::new(move |app: &mut App| {
-                for id in wanted {
-                    app.avatar(&id);
-                }
-            })));
-        }
+        let chats = super::profile::span("list: visible_chats", || app.visible_chats());
+        let rows: Vec<Row> = super::profile::span("list: rows", || {
+            chats.iter().map(|chat| row_of(app, chat)).collect()
+        });
 
-        let old = self.rows.borrow().clone();
-        *self.rows.borrow_mut() = rows.clone();
+        // The rows the list binds from become these; the old ones are only
+        // compared against, never copied.
+        let old = std::mem::replace(&mut *self.rows.borrow_mut(), rows);
+        let rows = self.rows.borrow();
         let list = self.list.clone();
         super::rows::update(
             &self.store,
@@ -313,7 +304,10 @@ fn row_of(app: &App, chat: &Chat) -> Row {
     }
 }
 
-fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::ToggleButton, RowWidgets) {
+fn row_widgets(
+    driver: &std::rc::Weak<Driver>,
+    asked: &Rc<RefCell<HashSet<String>>>,
+) -> (awra::ToggleButton, RowWidgets) {
     let content = awra::Box::new(awra::Orientation::Horizontal, 12);
     let avatar = awra::Avatar::new(44, None);
     avatar.set_valign(awra::Align::Center);
@@ -402,6 +396,8 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::ToggleButton, RowWidget
             mute,
             unread,
             shown,
+            asked: asked.clone(),
+            driver: driver.clone(),
         },
     )
 }
@@ -419,8 +415,19 @@ fn bind_row(widgets: &RowWidgets, row: &Row) {
         awra::AvatarShape::Circle
     });
     if picture_changed {
-        let texture = row.avatar.as_deref().and_then(super::pictures::file);
-        widgets.avatar.set_custom_image(texture.as_ref());
+        super::pictures::avatar(&widgets.avatar, row.avatar.as_deref());
+    }
+    // A row coming on screen without a picture asks WhatsApp for it.
+    if row.avatar.is_none()
+        && widgets.asked.borrow_mut().insert(row.id.clone())
+        && let Some(driver) = widgets.driver.upgrade()
+    {
+        let id = row.id.clone();
+        driver.later(Op::Edit(Box::new(move |app: &mut App| {
+            if app.avatar_unasked(&id) {
+                app.avatar(&id);
+            }
+        })));
     }
     widgets.title.set_text(&row.title);
     widgets.stamp.set_text(&row.stamp);

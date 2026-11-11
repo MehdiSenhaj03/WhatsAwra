@@ -139,8 +139,7 @@ impl CallList {
 fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::Widget {
     let line = awra::Box::new(awra::Orientation::Horizontal, 12);
     let avatar = awra::Avatar::new(40, Some(&row.name));
-    let picture = row.picture.as_deref().and_then(super::pictures::file);
-    avatar.set_custom_image(picture.as_ref());
+    super::pictures::avatar(&avatar, row.picture.as_deref());
     line.append(&avatar);
 
     let lines = awra::Box::new(awra::Orientation::Vertical, 1);

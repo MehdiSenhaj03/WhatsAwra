@@ -282,8 +282,7 @@ impl NewGroup {
             draft.name.trim()
         }));
         if self.shown_photo != draft.picture {
-            let texture = draft.picture.as_deref().and_then(super::pictures::file);
-            self.photo.set_custom_image(texture.as_ref());
+            super::pictures::avatar(&self.photo, draft.picture.as_deref());
             self.shown_photo = draft.picture.clone();
         }
         self.add_photo.set_label(

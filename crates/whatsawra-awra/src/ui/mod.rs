@@ -30,6 +30,7 @@ mod motion;
 mod picker;
 mod pictures;
 mod polls;
+mod profile;
 mod rows;
 mod search;
 mod settings;
@@ -246,9 +247,10 @@ impl Driver {
             };
             // An empty pass keeps the context's clock and repaint requests
             // moving, as a window's frames would.
-            let mut output = self
-                .ctx
-                .run_ui(input, |ui| app.frontend_turn(ui.ctx(), focused));
+            let mut output = profile::span("app", || {
+                self.ctx
+                    .run_ui(input, |ui| app.frontend_turn(ui.ctx(), focused))
+            });
             // Nothing paints the context, so its texture uploads go nowhere.
             output.textures_delta.clear();
             // The app brings an open window forward (a second launch, a
@@ -275,7 +277,7 @@ impl Driver {
             self.follow_window(&mut app);
         }
         let synced = Instant::now();
-        self.sync();
+        profile::span("views", || self.sync());
         // A turn that takes a frame or more is what makes the window lag.
         let took = synced.elapsed();
         let whole = self.turn_started.replace(Instant::now()).elapsed();
@@ -404,10 +406,17 @@ pub fn run(app: App, options: Options) {
                 awra::quit();
                 awra::glib::Propagation::Proceed
             });
+            if std::env::var_os("WHATSAWRA_BENCH").is_some() {
+                bench(&driver);
+            }
             if std::env::var_os("WHATSAWRA_TURNS").is_some() {
                 awra::glib::timeout_add_local(Duration::from_secs(1), || {
                     let turns = TURNS.with(|turns| turns.replace(0));
-                    eprintln!("turns in the last second: {turns}");
+                    eprintln!(
+                        "turns in the last second: {turns}
+{}",
+                        profile::report()
+                    );
                     awra::glib::ControlFlow::Continue
                 });
             }
@@ -424,4 +433,66 @@ pub(crate) fn wake() {
     if let Some(driver) = DRIVER.with(|slot| slot.borrow().upgrade()) {
         driver.wake();
     }
+}
+
+/// WHATSAWRA_BENCH: plays the reader for a few seconds (opening chats one
+/// after another, typing a line), then prints what each step's turn cost and
+/// quits. With `--demo --stress` it measures the window on a busy account.
+/// One thing the bench does as the reader.
+type Step = Box<dyn Fn(&Rc<Driver>)>;
+
+fn bench(driver: &Rc<Driver>) {
+    let chats: Vec<String> = driver.read(|app| {
+        app.visible_chats()
+            .iter()
+            .take(12)
+            .map(|chat| chat.id.clone())
+            .collect()
+    });
+    let mut steps: Vec<(&'static str, Step)> = Vec::new();
+    for chat in chats {
+        steps.push((
+            "open a chat",
+            Box::new(move |driver: &Rc<Driver>| {
+                driver.act(whatsawra::model::Action::OpenChat(chat.clone()))
+            }),
+        ));
+    }
+    for length in 1..=30 {
+        steps.push((
+            "type a letter",
+            Box::new(move |driver: &Rc<Driver>| {
+                let text = "Hello there, this is a test!!"
+                    .chars()
+                    .cycle()
+                    .take(length)
+                    .collect::<String>();
+                driver.edit(move |app| {
+                    app.composer = text;
+                    app.frontend_keystroke();
+                })
+            }),
+        ));
+    }
+    let weak = Rc::downgrade(driver);
+    let at = Cell::new(0usize);
+    let _ = profile::report();
+    awra::glib::timeout_add_local(Duration::from_millis(120), move || {
+        let Some(driver) = weak.upgrade() else {
+            return awra::glib::ControlFlow::Break;
+        };
+        let index = at.get();
+        if index > 0 {
+            let (name, _) = &steps[index - 1];
+            eprintln!("after {name}:\n{}", profile::report());
+        }
+        if let Some((_, step)) = steps.get(index) {
+            step(&driver);
+            at.set(index + 1);
+            awra::glib::ControlFlow::Continue
+        } else {
+            awra::quit();
+            awra::glib::ControlFlow::Break
+        }
+    });
 }

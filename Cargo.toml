@@ -361,3 +361,16 @@ opt-level = 2
 # Compiles the PO catalogs to Rust, leaving out unfinished entries. Ordinary
 # builds do not need gettext tools.
 fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.16.1", features = ["build"] }
+
+# The Awra window's everyday build, the one installed to try a change: the
+# app's own crates optimized too, yet incremental and without LTO, so it
+# rebuilds in seconds where a release takes minutes.
+[profile.snappy]
+inherits = "dev"
+opt-level = 2
+debug = false
+incremental = true
+codegen-units = 64
+
+[profile.snappy.package."*"]
+opt-level = 2

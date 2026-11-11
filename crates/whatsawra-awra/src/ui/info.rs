@@ -211,11 +211,7 @@ impl InfoPane {
         } else {
             awra::AvatarShape::Circle
         });
-        let picture = app
-            .avatar_path(&chat.id)
-            .as_deref()
-            .and_then(super::pictures::file);
-        self.avatar.set_custom_image(picture.as_ref());
+        super::pictures::avatar(&self.avatar, app.avatar_path(&chat.id).as_deref());
         self.name.set_text(&title);
         self.detail.set_text(&detail_of(app, chat));
 
@@ -333,11 +329,7 @@ fn member_row(
 ) -> awra::Widget {
     let row = awra::Box::new(awra::Orientation::Horizontal, 10);
     let face = awra::Avatar::new(32, Some(name));
-    let picture = app
-        .avatar_path(id)
-        .as_deref()
-        .and_then(super::pictures::file);
-    face.set_custom_image(picture.as_ref());
+    super::pictures::avatar(&face, app.avatar_path(id).as_deref());
     let label = awra::Label::new(Some(name));
     label.set_xalign(0.0);
     label.set_hexpand(true);

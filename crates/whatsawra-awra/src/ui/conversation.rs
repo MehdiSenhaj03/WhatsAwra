@@ -3,7 +3,7 @@
 //! the composer.
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -123,6 +123,9 @@ pub struct ConversationPane {
     emoji: awra::Button,
     /// The anchor last scrolled to, so it is reached once.
     reached: Option<String>,
+    /// The bubbles built for the open chat, reused while nothing about them
+    /// changes.
+    memo: HashMap<String, Memo>,
 }
 
 impl ConversationPane {
@@ -378,6 +381,7 @@ impl ConversationPane {
             picker,
             emoji,
             reached: None,
+            memo: HashMap::new(),
         }
     }
 
@@ -413,8 +417,7 @@ impl ConversationPane {
         });
         let picture = app.avatar_path(&chat.id);
         if switched || picture != self.shown_avatar {
-            let texture = picture.as_deref().and_then(super::pictures::file);
-            self.avatar.set_custom_image(texture.as_ref());
+            super::pictures::avatar(&self.avatar, picture.as_deref());
             self.shown_avatar = picture;
         }
         let (subtitle, tone) = whatsawra::present::chat_subtitle(app, chat);
@@ -436,7 +439,12 @@ impl ConversationPane {
             .conversations
             .get(&chat.id)
             .map_or(&[], |conversation| conversation.messages.as_slice());
-        let items = items_of(app, chat, messages);
+        if switched {
+            self.memo.clear();
+        }
+        let items = super::profile::span("conversation: items", || {
+            items_of(app, chat, messages, &mut self.memo)
+        });
 
         let mut wanted = Vec::new();
         for item in &items {
@@ -456,8 +464,11 @@ impl ConversationPane {
             })));
         }
 
-        let old = self.items.borrow().clone();
-        *self.items.borrow_mut() = items.clone();
+        // The items the rows bind from become these; the old ones are only
+        // compared against, never copied.
+        let old = std::mem::replace(&mut *self.items.borrow_mut(), items);
+        let items = self.items.clone();
+        let items = items.borrow();
         let object = |item: &Item| awra::Object::new(awra::StringObject(item.key().to_owned()));
         if switched {
             let objects: Vec<awra::Object> = items.iter().map(object).collect();
@@ -560,7 +571,35 @@ impl ConversationPane {
 
 /// The rows of a chat: its messages, a divider before each day and before
 /// the first unread message.
-fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
+/// What a bubble was built from besides its message, so a turn that changes
+/// none of it reuses the bubble instead of building it again.
+#[derive(Clone, PartialEq)]
+struct Around {
+    first_of_run: bool,
+    last_of_run: bool,
+    group_incoming: bool,
+    selected: Option<bool>,
+    /// The names and picture the bubble shows, which change without the
+    /// message (a contact renamed, a picture arriving).
+    sender: Option<String>,
+    face: Option<PathBuf>,
+    quoted: Option<String>,
+    locale: whatsawra::i18n::Locale,
+}
+
+/// A built bubble and what it was built from.
+pub(super) struct Memo {
+    message: Message,
+    around: Around,
+    bubble: Bubble,
+}
+
+fn items_of(
+    app: &App,
+    chat: &Chat,
+    messages: &[Message],
+    memo: &mut HashMap<String, Memo>,
+) -> Vec<Item> {
     let mut items = Vec::with_capacity(messages.len() + 8);
     let selection = app
         .selection
@@ -608,11 +647,49 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
         let first_of_run = !same_sender(previous);
         let last_of_run = !same_sender(next);
         let group_incoming = chat.is_group() && !message.from_me;
-        let name = || app.display_name_or(&message.sender, message.sender_name.as_deref());
-        let sender =
-            (group_incoming && first_of_run).then(|| (name(), sender_colour(&message.sender)));
-        let face = (group_incoming && last_of_run)
-            .then(|| (message.sender.clone(), app.avatar_path(&message.sender)));
+        let around = Around {
+            first_of_run,
+            last_of_run,
+            group_incoming,
+            selected: selection
+                .filter(|_| whatsawra::app::can_select(&message.content))
+                .map(|ids| ids.contains(&message.id)),
+            sender: (group_incoming && first_of_run)
+                .then(|| app.display_name_or(&message.sender, message.sender_name.as_deref())),
+            face: (group_incoming && last_of_run)
+                .then(|| app.avatar_path(&message.sender))
+                .flatten(),
+            quoted: message.quoted.as_ref().map(|quoted| {
+                if mine.contains(&quoted.sender.as_str()) {
+                    String::new()
+                } else {
+                    app.display_name_or(&quoted.sender, quoted.sender_name.as_deref())
+                }
+            }),
+            locale: app.locale,
+        };
+        // Media is read again every turn: a download, a player or a vote
+        // changes it without the message changing.
+        let (media, fetch) = match super::media::view_of(app, message) {
+            Some((media, fetch)) => (Some(media), fetch),
+            None => (None, false),
+        };
+        if let Some(memo) = memo.get(&message.id)
+            && memo.around == around
+            && memo.message == *message
+        {
+            let mut bubble = memo.bubble.clone();
+            bubble.media = media;
+            bubble.fetch = fetch;
+            items.push(Item::Message(Box::new(bubble)));
+            continue;
+        }
+        let sender = around
+            .sender
+            .clone()
+            .map(|name| (name, sender_colour(&message.sender)));
+        let face =
+            (group_incoming && last_of_run).then(|| (message.sender.clone(), around.face.clone()));
         let quote = message.quoted.as_ref().map(|quoted| {
             let who = if mine.contains(&quoted.sender.as_str()) {
                 gettext(app.locale, "You").into_owned()
@@ -622,10 +699,6 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             (who, quoted.summary_in(app.locale).replace('\n', " "))
         });
         let (markup, big) = body_of(app, message);
-        let (media, fetch) = match super::media::view_of(app, message) {
-            Some((media, fetch)) => (Some(media), fetch),
-            None => (None, false),
-        };
         let mut reactions: Vec<(String, usize, bool)> = Vec::new();
         for reaction in &message.reactions {
             match reactions
@@ -639,7 +712,7 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
                 None => reactions.push((reaction.emoji.clone(), 1, reaction.from_me)),
             }
         }
-        items.push(Item::Message(Box::new(Bubble {
+        let bubble = Bubble {
             id: message.id.clone(),
             from_me: message.from_me,
             sender,
@@ -656,10 +729,22 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             reactions,
             media,
             fetch,
-            selected: selection
-                .filter(|_| whatsawra::app::can_select(&message.content))
-                .map(|ids| ids.contains(&message.id)),
-        })));
+            selected: around.selected,
+        };
+        memo.insert(
+            message.id.clone(),
+            Memo {
+                message: message.clone(),
+                around,
+                bubble: bubble.clone(),
+            },
+        );
+        items.push(Item::Message(Box::new(bubble)));
+    }
+    // Messages gone from the chat (deleted, or a page let go) leave too.
+    if memo.len() > messages.len() {
+        let present: HashSet<&str> = messages.iter().map(|message| message.id.as_str()).collect();
+        memo.retain(|id, _| present.contains(id.as_str()));
     }
     items
 }
@@ -1017,8 +1102,7 @@ fn bind_bubble(widgets: &RowWidgets, bubble: &Bubble) {
             .as_ref()
             .map_or(id.as_str(), |(name, _)| name.as_str());
         widgets.face.set_text(Some(name));
-        let texture = picture.as_deref().and_then(super::pictures::file);
-        widgets.face.set_custom_image(texture.as_ref());
+        super::pictures::avatar(&widgets.face, picture.as_deref());
     }
     match &bubble.sender {
         Some((name, colour)) => {

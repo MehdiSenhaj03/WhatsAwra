@@ -14,11 +14,12 @@ pub const PHOTO_SIDE: u32 = 720;
 pub const FULL_SIDE: u32 = 2560;
 /// The longest side of a picker tile's picture.
 pub const TILE_SIDE: u32 = 192;
+/// The longest side a profile picture is kept at: the largest avatar (the
+/// info panel's) on a high-density screen.
+pub const AVATAR_SIDE: u32 = 256;
 
 #[derive(Default)]
 struct Cache {
-    /// Small files read at once (profile pictures).
-    files: HashMap<PathBuf, Option<awra::Texture>>,
     /// Photos decoded off the UI thread, by path.
     /// Decoded pictures by path and the longest side they were scaled to.
     photos: HashMap<(PathBuf, u32), Option<awra::Texture>>,
@@ -29,18 +30,60 @@ struct Cache {
 
 thread_local! {
     static CACHE: RefCell<Cache> = RefCell::new(Cache::default());
+    /// Avatars whose picture is being decoded.
+    static WAITING: RefCell<Vec<(PathBuf, awra::Avatar)>> = const { RefCell::new(Vec::new()) };
 }
 
-/// A small picture file (a profile picture), read now.
-pub fn file(path: &Path) -> Option<awra::Texture> {
-    CACHE.with(|cache| {
-        cache
-            .borrow_mut()
-            .files
-            .entry(path.to_path_buf())
-            .or_insert_with(|| awra::Texture::from_filename(path).ok())
-            .clone()
-    })
+/// Puts the profile picture at `path` in `avatar` (its initials without
+/// one). It decodes off this thread the first time, so a list of faces never
+/// holds the window up; the avatar fills in once it is ready, unless it has
+/// been given another picture by then.
+pub fn avatar(avatar: &awra::Avatar, path: Option<&Path>) {
+    let wanted = path.map(Path::to_path_buf);
+    if avatar.rust_data::<Option<PathBuf>>("picture").as_ref() == Some(&wanted) {
+        return;
+    }
+    avatar.set_rust_data("picture", wanted.clone());
+    let Some(path) = wanted else {
+        avatar.set_custom_image(None::<&awra::Texture>);
+        return;
+    };
+    if let Some(texture) = load(&path, AVATAR_SIDE) {
+        avatar.set_custom_image(Some(&texture));
+        return;
+    }
+    avatar.set_custom_image(None::<&awra::Texture>);
+    if photo_ready_at(&path, AVATAR_SIDE) {
+        return;
+    }
+    WAITING.with(|waiting| waiting.borrow_mut().push((path, avatar.clone())));
+}
+
+/// Fills the avatars that waited for `path`, once it is decoded.
+fn fill_waiting(path: &Path) {
+    let ready: Vec<awra::Avatar> = WAITING.with(|waiting| {
+        let mut waiting = waiting.borrow_mut();
+        let (ready, rest) = std::mem::take(&mut *waiting)
+            .into_iter()
+            .partition(|(waited, _)| waited == path);
+        *waiting = rest;
+        ready.into_iter().map(|(_, avatar)| avatar).collect()
+    });
+    if ready.is_empty() {
+        return;
+    }
+    let texture = load(path, AVATAR_SIDE);
+    for avatar in ready {
+        // Given another picture meanwhile: that one wins.
+        if avatar
+            .rust_data::<Option<PathBuf>>("picture")
+            .flatten()
+            .as_deref()
+            == Some(path)
+        {
+            avatar.set_custom_image(texture.as_ref());
+        }
+    }
 }
 
 /// A message's embedded JPEG thumbnail.
@@ -57,11 +100,16 @@ pub fn thumbnail(message: &str, jpeg: &[u8]) -> Option<awra::Texture> {
 
 /// Whether the photo at `path` is decoded (or failed to).
 pub fn photo_ready(path: &Path) -> bool {
+    photo_ready_at(path, PHOTO_SIDE)
+}
+
+/// Whether the picture at `path` is decoded at `side` (or failed to).
+fn photo_ready_at(path: &Path, side: u32) -> bool {
     CACHE.with(|cache| {
         cache
             .borrow()
             .photos
-            .contains_key(&(path.to_path_buf(), PHOTO_SIDE))
+            .contains_key(&(path.to_path_buf(), side))
     })
 }
 
@@ -106,8 +154,11 @@ fn load(path: &Path, side: u32) -> Option<awra::Texture> {
                         CACHE.with(|cache| {
                             let mut cache = cache.borrow_mut();
                             cache.loading.remove(&(path.clone(), side));
-                            cache.photos.insert((path, side), texture);
+                            cache.photos.insert((path.clone(), side), texture);
                         });
+                        if side == AVATAR_SIDE {
+                            fill_waiting(&path);
+                        }
                         super::wake();
                     });
                 })

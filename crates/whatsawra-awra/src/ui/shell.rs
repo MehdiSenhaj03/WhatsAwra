@@ -158,11 +158,8 @@ impl Rail {
         self.account_avatar.set_text(Some(&title));
         self.account.set_tooltip_text(Some(title.as_str()));
         let me = app.me.clone();
-        let picture = me
-            .as_deref()
-            .and_then(|me| app.avatar_path(me))
-            .and_then(|path| super::pictures::file(&path));
-        self.account_avatar.set_custom_image(picture.as_ref());
+        let picture = me.as_deref().and_then(|me| app.avatar_path(me));
+        super::pictures::avatar(&self.account_avatar, picture.as_deref());
     }
 }
 
@@ -334,7 +331,7 @@ impl Shell {
                 self.places.set_visible_child_name(place);
             }
             if place == "settings" {
-                self.settings.sync(app);
+                super::profile::span("settings", || self.settings.sync(app));
             }
             let list = if app.page == Page::Calls {
                 "calls"
@@ -345,14 +342,14 @@ impl Shell {
                 self.lists.set_visible_child_name(list);
             }
             if list == "calls" {
-                self.calls.sync(driver, app);
+                super::profile::span("calls", || self.calls.sync(driver, app));
             } else {
-                self.chats.sync(driver, app);
+                super::profile::span("chat list", || self.chats.sync(driver, app));
             }
-            self.conversation.sync(driver, app);
+            super::profile::span("conversation", || self.conversation.sync(driver, app));
             // The info panel and the search pane share the place beside the chat.
-            let info = self.info.sync(driver, app);
-            let searching = self.search.sync(app);
+            let info = super::profile::span("info", || self.info.sync(driver, app));
+            let searching = super::profile::span("search", || self.search.sync(app));
             let end = if searching {
                 Some("search")
             } else if info {
@@ -374,7 +371,7 @@ impl Shell {
         } else {
             self.login.sync(app);
         }
-        self.dialogs.sync(driver, app, &self.window);
+        super::profile::span("dialogs", || self.dialogs.sync(driver, app, &self.window));
         self.sync_toasts(driver, app);
     }
 

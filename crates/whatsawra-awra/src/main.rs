@@ -101,6 +101,9 @@ fn main() {
     if demo {
         whatsawra::demo::populate(&mut app);
         whatsawra::demo::apply_flags(&mut app, arg_value(&args, "--page").as_deref());
+        if args.iter().any(|arg| arg == "--stress") {
+            stress(&mut app);
+        }
     }
     if let Some(index) = arg_value(&args, "--open").and_then(|n| n.parse::<usize>().ok())
         && let Some(chat) = app.visible_chats().get(index).map(|chat| chat.id.clone())
@@ -138,4 +141,48 @@ fn main() {
     if let Some(root) = demo_root {
         let _ = std::fs::remove_dir_all(root);
     }
+}
+
+/// `--stress`: the sample made as large as a busy account, to measure the
+/// window with: four hundred chats, and six hundred messages in the first.
+#[cfg(feature = "demo")]
+fn stress(app: &mut app::App) {
+    let samples = app.chats.clone();
+    for index in 0..400 {
+        let mut chat = samples[index % samples.len()].clone();
+        chat.id = format!("1555{index:07}@s.whatsapp.net");
+        chat.name = format!("{} {index}", chat.name);
+        chat.pinned = false;
+        chat.last_activity -= 60 * (index as i64 + 1);
+        app.chats.push(chat);
+    }
+    let Some(first) = app.chats.first().map(|chat| chat.id.clone()) else {
+        return;
+    };
+    let conversation = app.conversations.entry(first).or_default();
+    let Some(template) = conversation
+        .messages
+        .iter()
+        .find(|message| matches!(message.content, whatsawra::model::Content::Text { .. }))
+        .cloned()
+    else {
+        return;
+    };
+    let newest = template.timestamp;
+    let mut older = Vec::new();
+    for index in 0..600 {
+        let mut message = template.clone();
+        message.id = format!("stress-{index}");
+        message.from_me = index % 3 == 0;
+        message.timestamp = newest - 600 * 60 + index as i64 * 50;
+        message.content = whatsawra::model::Content::Text {
+            text: format!(
+                "Message {index}: *bold* and _italic_ with a link https://example.com/{index} and an emoji 😀"
+            ),
+            preview: None,
+        };
+        older.push(message);
+    }
+    older.append(&mut conversation.messages);
+    conversation.messages = older;
 }

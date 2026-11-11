@@ -204,11 +204,8 @@ impl CallScreen {
         self.name.set_text(&title);
         if self.shown_chat.as_deref() != Some(call.chat.as_str()) {
             self.avatar.set_text(Some(&title));
-            let picture = app
-                .avatar_path(&call.chat)
-                .as_deref()
-                .and_then(super::pictures::file);
-            self.avatar.set_custom_image(picture.as_ref());
+            let picture = app.avatar_path(&call.chat);
+            super::pictures::avatar(&self.avatar, picture.as_deref());
             self.shown_chat = Some(call.chat.clone());
         }
         self.status
