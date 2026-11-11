@@ -116,6 +116,8 @@ pub struct ConversationPane {
     asked: HashSet<String>,
     picker: Rc<RefCell<Option<super::picker::Picker>>>,
     emoji: awra::Button,
+    /// The anchor last scrolled to, so it is reached once.
+    reached: Option<String>,
 }
 
 impl ConversationPane {
@@ -367,6 +369,7 @@ impl ConversationPane {
             asked: HashSet::new(),
             picker,
             emoji,
+            reached: None,
         }
     }
 
@@ -452,12 +455,41 @@ impl ConversationPane {
             let objects: Vec<awra::Object> = items.iter().map(object).collect();
             self.store.splice(0, self.store.n_items(), &objects);
             self.view.scroll_to_end(false);
+        } else {
+            let list = self.view.delegate();
+            super::rows::update(&self.store, &old, &items, Item::key, |position| {
+                list.rebind(position)
+            });
+        }
+        self.reach_anchor(driver, app, &items);
+    }
+
+    /// Brings the message the reader jumped to (a search hit, a quote, a
+    /// notification) to the middle, flashing it, once it is loaded. Other
+    /// anchors (the egui list keeping its place) are not this view's.
+    fn reach_anchor(&mut self, driver: &Rc<Driver>, app: &App, items: &[Item]) {
+        let Some(anchor) = app.scroll_anchor.as_deref() else {
+            self.reached = None;
+            return;
+        };
+        if !app
+            .jump_highlight
+            .as_ref()
+            .is_some_and(|jump| jump.message == anchor)
+            || self.reached.as_deref() == Some(anchor)
+        {
             return;
         }
-        let list = self.view.delegate();
-        super::rows::update(&self.store, &old, &items, Item::key, |position| {
-            list.rebind(position)
-        });
+        let Some(position) = items.iter().position(|item| item.key() == anchor) else {
+            return;
+        };
+        self.view
+            .scroll_to_item(position as u32, awra::ConversationAlign::Center, true);
+        self.reached = Some(anchor.to_owned());
+        driver.later(Op::Edit(Box::new(|app: &mut App| {
+            app.scroll_anchor = None;
+            app.jump_highlight = None;
+        })));
     }
 
     fn sync_composer(&mut self, driver: &Rc<Driver>, app: &App, chat: &Chat, switched: bool) {

@@ -46,7 +46,9 @@ pub struct Shell {
     split: awra::SplitView,
     info: super::info::InfoPane,
     info_scroll: awra::ScrolledWindow,
-    info_open: bool,
+    /// What the end pane shows: "info", "search" or nothing.
+    end: Option<&'static str>,
+    search: super::search::SearchPane,
     /// The theme last given to Awra.
     theme: Option<whatsawra::settings::ThemeChoice>,
     dialogs: super::dialogs::Dialogs,
@@ -211,6 +213,7 @@ impl Shell {
         info_scroll.set_hscrollbar_policy(awra::PolicyType::Never);
         info_scroll.set_child(Some(&info.root));
         split.set_end_pane_width(340);
+        let search = super::search::SearchPane::build(driver, locale);
 
         let settings = driver.read(|app| super::settings::SettingsPage::build(driver, app));
         let places = awra::Stack::new();
@@ -275,7 +278,8 @@ impl Shell {
             split,
             info,
             info_scroll,
-            info_open: false,
+            end: None,
+            search,
             theme: None,
             dialogs: super::dialogs::Dialogs::new(),
             shown_toasts: Vec::new(),
@@ -345,14 +349,26 @@ impl Shell {
                 self.chats.sync(driver, app);
             }
             self.conversation.sync(driver, app);
-            let open = self.info.sync(driver, app);
-            if open != self.info_open {
-                if open {
-                    self.split.set_end_pane(Some(&self.info_scroll));
-                } else {
-                    self.split.set_end_pane(None::<&awra::Widget>);
+            // The info panel and the search pane share the place beside the chat.
+            let info = self.info.sync(driver, app);
+            let searching = self.search.sync(app);
+            let end = if searching {
+                Some("search")
+            } else if info {
+                Some("info")
+            } else {
+                None
+            };
+            if end != self.end {
+                match end {
+                    Some("search") => {
+                        self.split.set_end_pane(Some(&self.search.root));
+                        self.search.focus();
+                    }
+                    Some(_) => self.split.set_end_pane(Some(&self.info_scroll)),
+                    None => self.split.set_end_pane(None::<&awra::Widget>),
                 }
-                self.info_open = open;
+                self.end = end;
             }
         } else {
             self.login.sync(app);

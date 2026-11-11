@@ -28,6 +28,7 @@ mod picker;
 mod pictures;
 mod polls;
 mod rows;
+mod search;
 mod settings;
 mod shell;
 mod viewer;
