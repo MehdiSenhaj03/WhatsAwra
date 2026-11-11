@@ -111,8 +111,9 @@ impl ChatList {
         let rows: Rc<RefCell<Vec<Row>>> = Rc::default();
         let store = awra::ListStore::new::<awra::StringObject>();
         let factory = awra::SignalListItemFactory::new();
-        factory.connect_setup(|_, item| {
-            let (root, widgets) = row_widgets();
+        let weak = Rc::downgrade(driver);
+        factory.connect_setup(move |_, item| {
+            let (root, widgets) = row_widgets(&weak);
             root.set_rust_data("row", widgets);
             item.set_child(Some(&root));
         });
@@ -305,7 +306,7 @@ fn row_of(app: &App, chat: &Chat) -> Row {
     }
 }
 
-fn row_widgets() -> (awra::Box, RowWidgets) {
+fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
     let root = awra::Box::new(awra::Orientation::Horizontal, 12);
     root.set_margin_top(6);
     root.set_margin_bottom(6);
@@ -351,6 +352,22 @@ fn row_widgets() -> (awra::Box, RowWidgets) {
     lines.append(&top);
     lines.append(&bottom);
     root.append(&lines);
+    let shown: Rc<RefCell<Option<Row>>> = Rc::default();
+    // A right click on a chat opens its menu.
+    let menu = awra::GestureClick::new();
+    menu.set_button(3);
+    let (weak, bound, anchor) = (driver.clone(), shown.clone(), root.clone());
+    menu.connect_pressed(move |_, _, x, y| {
+        let id = bound.borrow().as_ref().map(|row| row.id.clone());
+        let (Some(driver), Some(id)) = (weak.upgrade(), id) else {
+            return;
+        };
+        let entries = driver.read(|app| super::menus::chat(&driver, app, &id));
+        if !entries.is_empty() {
+            awra::menu::popup_at(&anchor, x, y, entries);
+        }
+    });
+    root.add_controller(menu);
     (
         root,
         RowWidgets {
@@ -361,7 +378,7 @@ fn row_widgets() -> (awra::Box, RowWidgets) {
             pin,
             mute,
             unread,
-            shown: Rc::default(),
+            shown,
         },
     )
 }
@@ -424,4 +441,15 @@ fn bind_row(widgets: &RowWidgets, row: &Row) {
         widgets.stamp.set_typography(awra::Typography::Muted);
     }
     *shown = Some(row.clone());
+}
+
+impl ChatList {
+    /// Opens the menu of the chat at `position`, as a right click would.
+    pub fn open_menu(&self, driver: &Rc<Driver>, position: usize) {
+        let Some(id) = self.rows.borrow().get(position).map(|row| row.id.clone()) else {
+            return;
+        };
+        let entries = driver.read(|app| super::menus::chat(driver, app, &id));
+        awra::menu::popup_at(&self.list, 120.0, 40.0, entries);
+    }
 }

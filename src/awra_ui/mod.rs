@@ -14,6 +14,7 @@
 mod chat_list;
 mod conversation;
 mod login;
+mod menus;
 mod shell;
 
 use std::cell::{Cell, RefCell};
@@ -61,6 +62,9 @@ pub struct Options {
     pub size: Option<(i32, i32)>,
     /// The waker the app's backends were made with, which wakes this loop.
     pub waker: Option<crate::backend::Waker>,
+    /// For a shot: open a menu first (`message`: the newest message's, `chat`:
+    /// the first chat's).
+    pub menu: Option<String>,
 }
 
 impl Driver {
@@ -241,8 +245,14 @@ pub fn run(app: App, options: Options) {
                 std::thread::sleep(Duration::from_millis(15));
             }
             driver.turn();
-            for _ in 0..10 {
+            if let Some(menu) = options.menu.as_deref()
+                && let Some(shell) = driver.shell.borrow().as_ref()
+            {
+                shell.open_menu(&driver, menu);
+            }
+            for _ in 0..30 {
                 awra::pump();
+                std::thread::sleep(Duration::from_millis(10));
             }
             window.render_offscreen(true);
             if !window.snapshot_png(&path.to_string_lossy()) {

@@ -7828,7 +7828,7 @@ pub(crate) fn revoke_refusal_said(locale: crate::i18n::Locale, blocker: RevokeBl
 
 /// What the menu's "Copy text" copies, before mentions are resolved: the
 /// text or caption, a location's coordinates or a contact's card.
-fn copyable_text(content: &Content) -> Option<String> {
+pub(crate) fn copyable_text(content: &Content) -> Option<String> {
     match content {
         Content::Text { text, .. } | Content::Interactive { text, .. } => Some(text.clone()),
         Content::Image { caption, .. }

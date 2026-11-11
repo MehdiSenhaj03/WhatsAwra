@@ -108,6 +108,7 @@ fn main() {
             shot,
             size,
             waker: Some(waker),
+            menu: arg_value(&args, "--menu"),
         },
     );
     drop(instance);

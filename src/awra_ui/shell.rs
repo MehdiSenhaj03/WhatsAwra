@@ -202,6 +202,14 @@ impl Shell {
         self.sync_toasts(driver, app);
     }
 
+    /// Opens a context menu as a right click would (shots of menus).
+    pub fn open_menu(&self, driver: &Rc<Driver>, which: &str) {
+        match which {
+            "chat" => self.chats.open_menu(driver, 0),
+            _ => self.conversation.open_menu(driver),
+        }
+    }
+
     /// Shows each toast the app adds once; the app keeps its own list and
     /// dismisses on its own clock.
     fn sync_toasts(&mut self, driver: &Rc<Driver>, app: &App) {

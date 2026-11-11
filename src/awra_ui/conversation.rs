@@ -84,6 +84,9 @@ struct RowWidgets {
     body: awra::Label,
     meta: awra::Label,
     reactions: awra::Box,
+    /// The message the row shows, for its menu and reactions.
+    bound: Rc<RefCell<Option<String>>>,
+    driver: std::rc::Weak<Driver>,
 }
 
 pub struct ConversationPane {
@@ -731,10 +734,26 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
     reactions.set_margin_bottom(2);
     root.append(&reactions);
 
-    let _ = driver;
+    let bound: Rc<RefCell<Option<String>>> = Rc::default();
+    // A right click anywhere on the message opens its menu.
+    let menu = awra::GestureClick::new();
+    menu.set_button(3);
+    let (weak, shown, anchor) = (driver.clone(), bound.clone(), line.clone());
+    menu.connect_pressed(move |_, _, x, y| {
+        let (Some(driver), Some(id)) = (weak.upgrade(), shown.borrow().clone()) else {
+            return;
+        };
+        let entries = driver.read(|app| super::menus::message(&driver, app, &id));
+        if !entries.is_empty() {
+            awra::menu::popup_at(&anchor, x, y, entries);
+        }
+    });
+    line.add_controller(menu);
     (
         root,
         RowWidgets {
+            bound,
+            driver: driver.clone(),
             divider,
             notice,
             line,
@@ -753,6 +772,10 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
 }
 
 fn bind_row(widgets: &RowWidgets, item: &Item) {
+    *widgets.bound.borrow_mut() = match item {
+        Item::Message(bubble) => Some(bubble.id.clone()),
+        _ => None,
+    };
     let show = |divider: bool, notice: bool, line: bool| {
         widgets.divider.set_visible(divider);
         widgets.notice.set_visible(notice);
@@ -873,6 +896,35 @@ fn bind_bubble(widgets: &RowWidgets, bubble: &Bubble) {
         }
         chip.set_active(*mine);
         chip.set_toggleable(false);
+        // Our own reaction comes off; another joins it.
+        let (weak, message) = (widgets.driver.clone(), bubble.id.clone());
+        let emoji = if *mine { String::new() } else { emoji.clone() };
+        chip.connect_activate(move |_| {
+            if let Some(driver) = weak.upgrade()
+                && let Some(chat) = driver.read(|app| app.open_chat.clone())
+            {
+                driver.act(Action::React {
+                    chat,
+                    message: message.clone(),
+                    emoji: emoji.clone(),
+                });
+            }
+        });
         widgets.reactions.append(&chip);
+    }
+}
+
+impl ConversationPane {
+    /// Opens the newest message's menu in the middle of the view, as a right
+    /// click on it would.
+    pub fn open_menu(&self, driver: &Rc<Driver>) {
+        let id = self.items.borrow().iter().rev().find_map(|item| match item {
+            Item::Message(bubble) => Some(bubble.id.clone()),
+            _ => None,
+        });
+        let Some(id) = id else { return };
+        let entries = driver.read(|app| super::menus::message(driver, app, &id));
+        let (width, height) = (self.view.width() as f64, self.view.height() as f64);
+        awra::menu::popup_at(&self.view, width * 0.6, height * 0.6, entries);
     }
 }
