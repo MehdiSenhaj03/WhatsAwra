@@ -69,6 +69,9 @@ struct Bubble {
     media: Option<super::media::MediaView>,
     /// The media should download as soon as the row shows.
     fetch: bool,
+    /// While messages are being selected: whether this one is (`None` when
+    /// nothing is being selected, or it cannot be).
+    selected: Option<bool>,
 }
 
 #[derive(Clone)]
@@ -78,6 +81,7 @@ struct RowWidgets {
     line: awra::Box,
     face: awra::Avatar,
     card: awra::MessageBubble,
+    content: awra::Box,
     sender: awra::Label,
     forwarded: awra::Label,
     quote: awra::Box,
@@ -109,6 +113,7 @@ pub struct ConversationPane {
     attachments: super::composer::Attachments,
     attachments_given: bool,
     recording: super::composer::Recording,
+    selecting: super::composer::SelectionBar,
     composer_banner: Option<String>,
     /// The chat the view shows, to start each chat at its newest message.
     shown_chat: Option<String>,
@@ -347,6 +352,8 @@ impl ConversationPane {
         });
         chat.append(&composer);
         chat.append(&recording.bar);
+        let selecting = super::composer::SelectionBar::build(driver, locale);
+        chat.append(&selecting.root);
         root.add_named(&chat, Some("chat"));
 
         Self {
@@ -364,6 +371,7 @@ impl ConversationPane {
             attachments,
             attachments_given: false,
             recording,
+            selecting,
             shown_chat: None,
             shown_avatar: None,
             asked: HashSet::new(),
@@ -508,7 +516,9 @@ impl ConversationPane {
         let recording = self
             .recording
             .sync(app, app.composer.trim().is_empty() && !staged);
-        self.composer.set_visible(!recording);
+        // Selecting messages, their actions take the composer's place.
+        let selecting = self.selecting.sync(app, &chat.id);
+        self.composer.set_visible(!recording && !selecting);
         if self.composer.text() != app.composer {
             self.composer.set_text(Some(&app.composer));
         }
@@ -552,6 +562,11 @@ impl ConversationPane {
 /// the first unread message.
 fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
     let mut items = Vec::with_capacity(messages.len() + 8);
+    let selection = app
+        .selection
+        .as_ref()
+        .filter(|(open, _)| *open == chat.id)
+        .map(|(_, ids)| ids);
     let mut day = None;
     let unread_from = app
         .unread_divider
@@ -641,6 +656,9 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             reactions,
             media,
             fetch,
+            selected: selection
+                .filter(|_| whatsawra::app::can_select(&message.content))
+                .map(|ids| ids.contains(&message.id)),
         })));
     }
     items
@@ -897,6 +915,13 @@ fn row_widgets(
             awra::menu::popup_at(&anchor, x, y, entries);
         }
     });
+    // While selecting, a click on a bubble ticks it or unticks it.
+    let (weak, shown) = (driver.clone(), bound.clone());
+    card.connect_activated(move |_| {
+        if let (Some(driver), Some(id)) = (weak.upgrade(), shown.borrow().clone()) {
+            driver.act(Action::ToggleSelected(id));
+        }
+    });
     line.add_controller(menu);
     (
         root,
@@ -908,6 +933,7 @@ fn row_widgets(
             line,
             face,
             card,
+            content,
             sender,
             forwarded,
             quote,
@@ -975,6 +1001,10 @@ fn bind_bubble(widgets: &RowWidgets, bubble: &Bubble) {
     widgets.reactions.set_halign(align);
     widgets.card.set_outgoing(bubble.from_me);
     widgets.card.set_tail(bubble.tail);
+    // Selecting, the whole bubble takes the click: its text and media rest.
+    widgets.card.set_activatable(bubble.selected.is_some());
+    widgets.card.set_selected(bubble.selected == Some(true));
+    widgets.content.set_can_target(bubble.selected.is_none());
     widgets
         .face
         .set_visible(bubble.face.is_some() || bubble.indent);

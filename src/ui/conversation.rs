@@ -7111,7 +7111,7 @@ fn viewer_file(message: &Message) -> Option<&Path> {
 }
 
 /// Checks every selected message's revoke eligibility with one scan of loaded history.
-fn selection_can_revoke(messages: &[Message], selected: &[String], now: i64) -> bool {
+pub fn selection_can_revoke(messages: &[Message], selected: &[String], now: i64) -> bool {
     if selected.is_empty() {
         return false;
     }
