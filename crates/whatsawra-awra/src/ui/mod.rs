@@ -26,6 +26,7 @@ mod media;
 mod menus;
 mod picker;
 mod pictures;
+mod polls;
 mod rows;
 mod settings;
 mod shell;

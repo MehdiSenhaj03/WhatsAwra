@@ -340,3 +340,13 @@ fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::ToggleButton {
         }
     })
 }
+
+impl super::dialogs::Live for Chooser {
+    fn dialog(&self) -> awra::Dialog {
+        self.dialog.clone()
+    }
+
+    fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
+        Chooser::sync(self, driver, app);
+    }
+}

@@ -593,7 +593,9 @@ pub fn results(app: &mut App, ui: &mut egui::Ui, chat: &str, id: &str) {
     });
 }
 
-fn selection_after_click(state: &PollState, index: usize) -> Option<Vec<usize>> {
+/// The choices after a click on option `index`, `None` when the poll takes
+/// no more.
+pub fn selection_after_click(state: &PollState, index: usize) -> Option<Vec<usize>> {
     let mut choices = state.selected.clone();
     if choices.contains(&index) {
         choices.retain(|&choice| choice != index);

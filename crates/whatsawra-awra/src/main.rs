@@ -5,7 +5,8 @@
 //! `--shot <png>` renders the window offscreen to a picture and quits;
 //! `--size WxH` sets the shot's size; `--open <n>` opens the n-th chat;
 //! `--page <flags>` applies the demo's sample states (as `whatsawra --demo-page`).
-//! `--place settings` or `--place calls` opens that page; `--info` the open
+//! `--place settings` or `--place calls` opens that page; `--poll` the open
+//! chat's Create poll; `--info` the open
 //! chat's info.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -105,6 +106,11 @@ fn main() {
         && let Some(chat) = app.visible_chats().get(index).map(|chat| chat.id.clone())
     {
         app.queue(whatsawra::model::Action::OpenChat(chat.clone()));
+        if args.iter().any(|arg| arg == "--poll") {
+            app.queue(whatsawra::model::Action::ShowDialog(
+                whatsawra::model::Dialog::CreatePoll(chat.clone()),
+            ));
+        }
         if args.iter().any(|arg| arg == "--info") {
             app.queue(whatsawra::model::Action::OpenInfo(chat));
         }

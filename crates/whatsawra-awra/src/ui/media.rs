@@ -52,6 +52,7 @@ pub enum MediaView {
         detail: String,
         loading: bool,
     },
+    Poll(Box<super::polls::PollView>),
 }
 
 /// A clip playing in its bubble: its frame and where it is.
@@ -100,6 +101,9 @@ fn playing(app: &App, message: &str) -> Option<Playing> {
 
 /// What a message shows of its media, and whether to fetch it now.
 pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
+    if let Some(poll) = super::polls::view(app, message) {
+        return Some((MediaView::Poll(Box::new(poll)), false));
+    }
     let media = message.content.media()?;
     let loading = matches!(media.state, MediaState::Downloading);
     let failed = match &media.state {
@@ -214,6 +218,7 @@ pub struct MediaWidgets {
     document: awra::Box,
     document_name: awra::Label,
     document_detail: awra::Label,
+    poll: super::polls::PollWidgets,
     shown: Rc<RefCell<Option<(String, MediaView)>>>,
 }
 
@@ -316,6 +321,13 @@ impl MediaWidgets {
         document.set_margin_bottom(2);
         root.append(&document);
         click(&document, driver, &shown);
+        let locale = driver
+            .upgrade()
+            .map_or(whatsawra::i18n::Locale::English, |driver| {
+                driver.read(|app| app.locale)
+            });
+        let poll = super::polls::PollWidgets::build(driver, locale);
+        root.append(&poll.root);
 
         Self {
             root,
@@ -330,6 +342,7 @@ impl MediaWidgets {
             document,
             document_name,
             document_detail,
+            poll,
             shown,
         }
     }
@@ -345,12 +358,17 @@ impl MediaWidgets {
             MediaView::Picture { .. } => kind == 0,
             MediaView::Voice { .. } => kind == 1,
             MediaView::Document { .. } => kind == 2,
+            MediaView::Poll(_) => kind == 3,
         };
         self.picture
             .parent()
             .inspect(|overlay| overlay.set_visible(is(0)));
         self.voice.set_visible(is(1));
         self.document.set_visible(is(2));
+        match media {
+            MediaView::Poll(poll) => self.poll.bind(message, Some(poll)),
+            _ => self.poll.bind(message, None),
+        }
         match media {
             MediaView::Picture {
                 path,
@@ -435,6 +453,7 @@ impl MediaWidgets {
                 let shown = position.unwrap_or(*seconds).max(0.0) as u32;
                 self.voice_time.set_text(&whatsawra::util::duration(shown));
             }
+            MediaView::Poll(_) => {}
             MediaView::Document {
                 name,
                 detail,
@@ -485,7 +504,7 @@ fn click(
                 ..
             } => (path, loading, video.is_some(), true),
             MediaView::Document { path, loading, .. } => (path, loading, false, false),
-            MediaView::Voice { .. } => return,
+            MediaView::Voice { .. } | MediaView::Poll(_) => return,
         };
         match path {
             // A clip plays in its bubble; a picture opens in the viewer over

@@ -12,7 +12,7 @@ use awra::prelude::*;
 use super::{Driver, Op};
 use whatsawra::app::App;
 use whatsawra::i18n::{Locale, gettext};
-use whatsawra::model::{Action, Chat, Content, Delivery, Message};
+use whatsawra::model::{Action, Chat, Content, Delivery, Dialog, Message};
 
 /// One row of the message list.
 #[derive(Clone, Debug, PartialEq)]
@@ -237,11 +237,37 @@ impl ConversationPane {
         let attach = awra::Button::from_icon_name("list-add-symbolic");
         attach.set_appearance(awra::ButtonAppearance::Toolbar);
         attach.set_tooltip_text(Some(gettext(locale, "Attach").as_ref()));
+        // The composer's tools: files, a document, a poll.
         let weak = Rc::downgrade(driver);
-        attach.connect_clicked(move |_| {
-            if let Some(driver) = weak.upgrade() {
-                driver.act(Action::Attach { documents: false });
-            }
+        attach.connect_clicked(move |button| {
+            let Some(driver) = weak.upgrade() else { return };
+            let Some(chat) = driver.read(|app| app.open_chat.clone()) else {
+                return;
+            };
+            let on = |action: Action| {
+                let weak = Rc::downgrade(&driver);
+                move || {
+                    if let Some(driver) = weak.upgrade() {
+                        driver.act(action.clone());
+                    }
+                }
+            };
+            let t = |text: &'static str| gettext(locale, text).into_owned();
+            let entries = vec![
+                awra::menu::Entry::item(t("Send files"), on(Action::Attach { documents: false }))
+                    .icon("mail-attachment-symbolic"),
+                awra::menu::Entry::item(
+                    t("Send as document"),
+                    on(Action::Attach { documents: true }),
+                )
+                .icon("x-office-document-symbolic"),
+                awra::menu::Entry::item(
+                    t("Create poll"),
+                    on(Action::ShowDialog(Dialog::CreatePoll(chat))),
+                )
+                .icon("view-list-symbolic"),
+            ];
+            awra::menu::popup_at(button, 0.0, 0.0, entries);
         });
         composer.set_start_widget(Some(&attach));
         let emoji = awra::Button::from_icon_name("face-smile-symbolic");
@@ -621,6 +647,10 @@ fn notice_of(app: &App, message: &Message) -> Option<String> {
 
 /// A bubble's text as markup, and whether it is emoji alone (drawn large).
 fn body_of(app: &App, message: &Message) -> (String, bool) {
+    // A poll draws its question in its ballot.
+    if matches!(message.content, Content::Poll { .. }) {
+        return (String::new(), false);
+    }
     // Read once per message and text: every turn reads every loaded message.
     thread_local! {
         static MARKUP: RefCell<std::collections::HashMap<String, (u64, String, bool)>> =

@@ -10,10 +10,16 @@ use whatsawra::app::App;
 use whatsawra::i18n::gettext;
 use whatsawra::model::{Action, Dialog};
 
+/// A dialog that reads the app at every turn while it is open.
+pub trait Live {
+    fn dialog(&self) -> awra::Dialog;
+    fn sync(&mut self, driver: &Rc<Driver>, app: &App);
+}
+
 pub struct Dialogs {
     shown: Option<(Dialog, awra::Dialog)>,
     /// The open dialog when it reads the app at every turn.
-    chooser: Option<super::chooser::Chooser>,
+    chooser: Option<Box<dyn Live>>,
 }
 
 impl Dialogs {
@@ -53,9 +59,11 @@ impl Dialogs {
         let shown = if let Some(confirmation) = whatsawra::confirm::of(app, &dialog) {
             confirmation_dialog(driver, app, window, confirmation)
         } else if let Some(mut chooser) = super::chooser::Chooser::of(driver, app, window, &dialog)
+            .map(|chooser| Box::new(chooser) as Box<dyn Live>)
+            .or_else(|| super::polls::dialog_of(driver, app, window, &dialog))
         {
             chooser.sync(driver, app);
-            let shown = chooser.dialog.clone();
+            let shown = chooser.dialog();
             self.chooser = Some(chooser);
             shown
         } else {
