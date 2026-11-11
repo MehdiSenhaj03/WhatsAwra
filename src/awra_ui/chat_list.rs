@@ -9,7 +9,6 @@ use std::rc::Rc;
 
 use awra::prelude::*;
 
-use super::shell::Pictures;
 use super::{Driver, Op};
 use crate::app::App;
 use crate::i18n::{Locale, gettext};
@@ -185,7 +184,7 @@ impl ChatList {
         }
     }
 
-    pub fn sync(&mut self, driver: &Rc<Driver>, app: &App, _pictures: &mut Pictures) {
+    pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
         let heading = if app.show_starred {
             gettext(app.locale, "Starred")
         } else if app.show_archived {
@@ -395,10 +394,7 @@ fn bind_row(widgets: &RowWidgets, row: &Row) {
         awra::AvatarShape::Circle
     });
     if picture_changed {
-        let texture = row
-            .avatar
-            .as_deref()
-            .and_then(|path| awra::Texture::from_filename(path).ok());
+        let texture = row.avatar.as_deref().and_then(super::pictures::file);
         widgets.avatar.set_custom_image(texture.as_ref());
     }
     widgets.title.set_text(&row.title);

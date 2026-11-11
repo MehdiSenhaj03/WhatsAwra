@@ -2,8 +2,6 @@
 //! open chat, with the linking screen in their place until an account is
 //! linked.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use awra::prelude::*;
@@ -16,21 +14,6 @@ use crate::app::App;
 use crate::i18n::gettext;
 use crate::model::{Action, Page};
 
-/// Pictures read from disk once and shared by every view that shows them.
-#[derive(Default)]
-pub struct Pictures {
-    textures: HashMap<PathBuf, Option<awra::Texture>>,
-}
-
-impl Pictures {
-    pub fn get(&mut self, path: &Path) -> Option<awra::Texture> {
-        self.textures
-            .entry(path.to_path_buf())
-            .or_insert_with(|| awra::Texture::from_filename(path).ok())
-            .clone()
-    }
-}
-
 pub struct Shell {
     pub window: awra::Window,
     toasts: awra::ToastOverlay,
@@ -40,7 +23,6 @@ pub struct Shell {
     chats: ChatList,
     conversation: ConversationPane,
     dialogs: super::dialogs::Dialogs,
-    pictures: Pictures,
     /// Toasts already shown, by their place in `App::toasts` and text.
     shown_toasts: Vec<String>,
 }
@@ -110,7 +92,7 @@ impl Rail {
         }
     }
 
-    fn sync(&self, app: &App, pictures: &mut Pictures) {
+    fn sync(&self, app: &App) {
         let place = if app.page == Page::Settings {
             &self.settings
         } else if app.page == Page::Calls {
@@ -139,7 +121,7 @@ impl Rail {
         let picture = me
             .as_deref()
             .and_then(|me| app.avatar_path(me))
-            .and_then(|path| pictures.get(&path));
+            .and_then(|path| super::pictures::file(&path));
         self.account_avatar.set_custom_image(picture.as_ref());
     }
 }
@@ -184,7 +166,6 @@ impl Shell {
             chats,
             conversation,
             dialogs: super::dialogs::Dialogs::new(),
-            pictures: Pictures::default(),
             shown_toasts: Vec::new(),
         }
     }
@@ -195,9 +176,9 @@ impl Shell {
             self.pages.set_visible_child_name(page);
         }
         if app.is_linked() {
-            self.rail.sync(app, &mut self.pictures);
-            self.chats.sync(driver, app, &mut self.pictures);
-            self.conversation.sync(driver, app, &mut self.pictures);
+            self.rail.sync(app);
+            self.chats.sync(driver, app);
+            self.conversation.sync(driver, app);
         } else {
             self.login.sync(app);
         }

@@ -9,7 +9,6 @@ use std::rc::Rc;
 
 use awra::prelude::*;
 
-use super::shell::Pictures;
 use super::{Driver, Op};
 use crate::app::App;
 use crate::i18n::{Locale, gettext};
@@ -67,6 +66,9 @@ struct Bubble {
     status: Option<Delivery>,
     edited: bool,
     reactions: Vec<(String, usize, bool)>,
+    media: Option<super::media::MediaView>,
+    /// The media should download as soon as the row shows.
+    fetch: bool,
 }
 
 #[derive(Clone)]
@@ -84,6 +86,9 @@ struct RowWidgets {
     body: awra::Label,
     meta: awra::Label,
     reactions: awra::Box,
+    media: super::media::MediaWidgets,
+    /// Messages whose media this view has asked for.
+    fetched: Rc<RefCell<HashSet<String>>>,
     /// The message the row shows, for its menu and reactions.
     bound: Rc<RefCell<Option<String>>>,
     driver: std::rc::Weak<Driver>,
@@ -177,8 +182,9 @@ impl ConversationPane {
         let store = awra::ListStore::new::<awra::StringObject>();
         let factory = awra::SignalListItemFactory::new();
         let weak = Rc::downgrade(driver);
+        let fetched: Rc<RefCell<HashSet<String>>> = Rc::default();
         factory.connect_setup(move |_, item| {
-            let (root, widgets) = row_widgets(&weak);
+            let (root, widgets) = row_widgets(&weak, &fetched);
             root.set_rust_data("row", widgets);
             item.set_child(Some(&root));
         });
@@ -311,7 +317,7 @@ impl ConversationPane {
         }
     }
 
-    pub fn sync(&mut self, driver: &Rc<Driver>, app: &App, pictures: &mut Pictures) {
+    pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
         let Some(chat) = app.current_chat() else {
             if self.root.visible_child_name().as_deref() != Some("empty") {
                 self.root.set_visible_child_name("empty");
@@ -323,13 +329,13 @@ impl ConversationPane {
             self.root.set_visible_child_name("chat");
         }
         let switched = self.shown_chat.as_deref() != Some(chat.id.as_str());
-        self.sync_header(app, chat, pictures, switched);
+        self.sync_header(app, chat, switched);
         self.sync_messages(driver, app, chat, switched);
         self.sync_composer(app, chat, switched);
         self.shown_chat = Some(chat.id.clone());
     }
 
-    fn sync_header(&mut self, app: &App, chat: &Chat, pictures: &mut Pictures, switched: bool) {
+    fn sync_header(&mut self, app: &App, chat: &Chat, switched: bool) {
         let title = app.chat_title(chat);
         self.title.set_text(&title);
         self.avatar.set_text(Some(&title));
@@ -340,7 +346,7 @@ impl ConversationPane {
         });
         let picture = app.avatar_path(&chat.id);
         if switched || picture != self.shown_avatar {
-            let texture = picture.as_deref().and_then(|path| pictures.get(path));
+            let texture = picture.as_deref().and_then(super::pictures::file);
             self.avatar.set_custom_image(texture.as_ref());
             self.shown_avatar = picture;
         }
@@ -517,6 +523,10 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             (who, quoted.summary_in(app.locale).replace('\n', " "))
         });
         let (markup, big) = body_of(app, message);
+        let (media, fetch) = match super::media::view_of(app, message) {
+            Some((media, fetch)) => (Some(media), fetch),
+            None => (None, false),
+        };
         let mut reactions: Vec<(String, usize, bool)> = Vec::new();
         for reaction in &message.reactions {
             match reactions
@@ -545,6 +555,8 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             status: message.from_me.then_some(message.status),
             edited: message.edited,
             reactions,
+            media,
+            fetch,
         }));
     }
     items
@@ -592,32 +604,23 @@ fn body_of(app: &App, message: &Message) -> (String, bool) {
                 big,
             )
         }
-        Content::Image { caption, .. } | Content::Video { caption, .. } => {
-            let label = message.summary_in(app.locale);
-            let markup = match caption.as_deref().filter(|caption| !caption.is_empty()) {
-                Some(caption) => format!(
-                    "<i>{}</i>\n{}",
-                    escape(&label_only(&label, caption)),
-                    crate::markup::pango(caption, &mentions, "#3b9cff", "#8a8a8a")
-                ),
-                None => format!("<i>{}</i>", escape(&label)),
-            };
-            (markup, false)
-        }
+        // The media draws itself; only a caption goes under it.
+        Content::Image { caption, .. }
+        | Content::Video { caption, .. }
+        | Content::Document { caption, .. } => (
+            caption
+                .as_deref()
+                .filter(|caption| !caption.is_empty())
+                .map(|caption| crate::markup::pango(caption, &mentions, "#3b9cff", "#8a8a8a"))
+                .unwrap_or_default(),
+            false,
+        ),
+        Content::Audio { .. } | Content::Sticker { .. } => (String::new(), false),
         _ => (
             format!("<i>{}</i>", escape(&app.message_text(message))),
             false,
         ),
     }
-}
-
-/// The content label ("Photo") of a summary that goes on with the caption.
-fn label_only(summary: &str, caption: &str) -> String {
-    summary
-        .strip_suffix(caption)
-        .map(|label| label.trim_end_matches([':', ' ', '·']).to_owned())
-        .filter(|label| !label.is_empty())
-        .unwrap_or_else(|| summary.to_owned())
 }
 
 fn escape(text: &str) -> String {
@@ -662,7 +665,10 @@ fn hsl(hue: f32, saturation: f32, lightness: f32) -> (u8, u8, u8) {
     (byte(r), byte(g), byte(b))
 }
 
-fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
+fn row_widgets(
+    driver: &std::rc::Weak<Driver>,
+    fetched: &Rc<RefCell<HashSet<String>>>,
+) -> (awra::Box, RowWidgets) {
     let root = awra::Box::new(awra::Orientation::Vertical, 0);
     root.set_margin_start(16);
     root.set_margin_end(16);
@@ -712,6 +718,9 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
     quote.append(&quote_name);
     quote.append(&quote_text);
     content.append(&quote);
+
+    let media = super::media::MediaWidgets::build(driver);
+    content.append(&media.root);
 
     let body = awra::Label::new(None);
     body.set_xalign(0.0);
@@ -767,6 +776,8 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
             body,
             meta,
             reactions,
+            media,
+            fetched: fetched.clone(),
         },
     )
 }
@@ -836,9 +847,7 @@ fn bind_bubble(widgets: &RowWidgets, bubble: &Bubble) {
             .as_ref()
             .map_or(id.as_str(), |(name, _)| name.as_str());
         widgets.face.set_text(Some(name));
-        let texture = picture
-            .as_deref()
-            .and_then(|path| awra::Texture::from_filename(path).ok());
+        let texture = picture.as_deref().and_then(super::pictures::file);
         widgets.face.set_custom_image(texture.as_ref());
     }
     match &bubble.sender {
@@ -863,7 +872,27 @@ fn bind_bubble(widgets: &RowWidgets, bubble: &Bubble) {
         }
         None => widgets.quote.set_visible(false),
     }
+    widgets.body.set_visible(!bubble.markup.is_empty());
     widgets.body.set_markup(&bubble.markup);
+    let thumbnail = widgets.driver.upgrade().and_then(|driver| {
+        driver.read(|app| {
+            let chat = app.open_chat.as_deref()?;
+            app.conversations
+                .get(chat)?
+                .message(&bubble.id)?
+                .thumbnail
+                .clone()
+        })
+    });
+    widgets
+        .media
+        .bind(&bubble.id, bubble.media.as_ref(), thumbnail.as_deref());
+    if bubble.fetch
+        && let Some(driver) = widgets.driver.upgrade()
+        && let Some(chat) = driver.read(|app| app.open_chat.clone())
+    {
+        super::media::fetch(&driver, &widgets.fetched, &chat, &bubble.id);
+    }
     widgets.body.set_scale(if bubble.big { 2.4 } else { 1.0 });
     let tick = match bubble.status {
         Some(Delivery::Pending) => " 🕓",

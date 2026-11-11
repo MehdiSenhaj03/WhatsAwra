@@ -15,7 +15,9 @@ mod chat_list;
 mod conversation;
 mod dialogs;
 mod login;
+mod media;
 mod menus;
+mod pictures;
 mod shell;
 
 use std::cell::{Cell, RefCell};
@@ -280,4 +282,12 @@ pub fn run(app: App, options: Options) {
     }
     driver.app.borrow_mut().shutdown_for_frontend();
     drop(application);
+}
+
+/// Asks for a turn from anywhere on the UI thread (a picture finished
+/// decoding), once the driver exists.
+pub(crate) fn wake() {
+    if let Some(driver) = DRIVER.with(|slot| slot.borrow().upgrade()) {
+        driver.wake();
+    }
 }
