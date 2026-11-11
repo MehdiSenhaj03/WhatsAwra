@@ -39,6 +39,7 @@ pub struct Shell {
     rail: Rail,
     chats: ChatList,
     conversation: ConversationPane,
+    dialogs: super::dialogs::Dialogs,
     pictures: Pictures,
     /// Toasts already shown, by their place in `App::toasts` and text.
     shown_toasts: Vec<String>,
@@ -182,6 +183,7 @@ impl Shell {
             rail,
             chats,
             conversation,
+            dialogs: super::dialogs::Dialogs::new(),
             pictures: Pictures::default(),
             shown_toasts: Vec::new(),
         }
@@ -199,6 +201,7 @@ impl Shell {
         } else {
             self.login.sync(app);
         }
+        self.dialogs.sync(driver, app, &self.window);
         self.sync_toasts(driver, app);
     }
 

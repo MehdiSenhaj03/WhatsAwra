@@ -46,8 +46,12 @@ pub fn message(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
 
     if can_reply(&message.content) && chat.can_send() {
         entries.push(
-            item(driver, gettext(locale, "Reply"), Action::Reply(id.to_owned()))
-                .icon("awra-reply-symbolic"),
+            item(
+                driver,
+                gettext(locale, "Reply"),
+                Action::Reply(id.to_owned()),
+            )
+            .icon("awra-reply-symbolic"),
         );
     }
     if chat.is_group() && !message.from_me && can_reply(&message.content) {
@@ -75,19 +79,28 @@ pub fn message(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
                 )
             })
             .collect();
-        entries.push(Entry::submenu(gettext(locale, "React"), reactions).icon("face-smile-symbolic"));
+        entries
+            .push(Entry::submenu(gettext(locale, "React"), reactions).icon("face-smile-symbolic"));
     }
     if let Some(text) = copyable_text(&message.content) {
         let plain = crate::markup::plain(&text, &app.mention_list(message));
         entries.push(
-            item(driver, gettext(locale, "Copy text"), Action::CopyText(plain))
-                .icon("edit-copy-symbolic"),
+            item(
+                driver,
+                gettext(locale, "Copy text"),
+                Action::CopyText(plain),
+            )
+            .icon("edit-copy-symbolic"),
         );
     }
     if crate::app::can_select(&message.content) {
         entries.push(
-            item(driver, gettext(locale, "Forward"), forward_action(&chat_id, id))
-                .icon("awra-forward-symbolic"),
+            item(
+                driver,
+                gettext(locale, "Forward"),
+                forward_action(&chat_id, id),
+            )
+            .icon("awra-forward-symbolic"),
         );
     }
     if !revoked {
@@ -111,14 +124,18 @@ pub fn message(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
                 "starred-symbolic"
             }),
         );
-        let pinned = app
-            .pins
-            .get(&chat_id)
-            .is_some_and(|pins| pins.contains(id));
+        let pinned = app.pins.get(&chat_id).is_some_and(|pins| pins.contains(id));
         entries.push(
             item(
                 driver,
-                gettext(locale, if pinned { "Unpin message" } else { "Pin message" }),
+                gettext(
+                    locale,
+                    if pinned {
+                        "Unpin message"
+                    } else {
+                        "Pin message"
+                    },
+                ),
                 Action::SetMessagePinned {
                     chat: chat_id.clone(),
                     message: id.to_owned(),
@@ -130,15 +147,23 @@ pub fn message(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
     }
     if crate::app::can_select(&message.content) {
         entries.push(
-            item(driver, gettext(locale, "Select"), Action::SelectMessage(id.to_owned()))
-                .icon("object-select-symbolic"),
+            item(
+                driver,
+                gettext(locale, "Select"),
+                Action::SelectMessage(id.to_owned()),
+            )
+            .icon("object-select-symbolic"),
         );
     }
     if let Some(path) = message.content.media().and_then(|media| media.path.clone()) {
         entries.push(Entry::separator());
         entries.push(
-            item(driver, gettext(locale, "Open"), Action::OpenFile(path.clone()))
-                .icon("document-open-symbolic"),
+            item(
+                driver,
+                gettext(locale, "Open"),
+                Action::OpenFile(path.clone()),
+            )
+            .icon("document-open-symbolic"),
         );
         if let Some(folder) = path.parent() {
             entries.push(
@@ -231,7 +256,14 @@ pub fn chat(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
     entries.push(
         item(
             driver,
-            gettext(locale, if chat.archived { "Unarchive" } else { "Archive" }),
+            gettext(
+                locale,
+                if chat.archived {
+                    "Unarchive"
+                } else {
+                    "Archive"
+                },
+            ),
             Action::SetArchived(id.clone(), !chat.archived),
         )
         .icon("awra-archive-symbolic"),
@@ -250,11 +282,19 @@ pub fn chat(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
         }),
     );
     entries.push(if chat.looks_unread() {
-        item(driver, gettext(locale, "Mark as read"), Action::MarkRead(id.clone()))
-            .icon("check-symbolic")
+        item(
+            driver,
+            gettext(locale, "Mark as read"),
+            Action::MarkRead(id.clone()),
+        )
+        .icon("check-symbolic")
     } else {
-        item(driver, gettext(locale, "Mark as unread"), Action::MarkUnread(id.clone()))
-            .icon("awra-chats-symbolic")
+        item(
+            driver,
+            gettext(locale, "Mark as unread"),
+            Action::MarkUnread(id.clone()),
+        )
+        .icon("awra-chats-symbolic")
     });
     entries.push(Entry::separator());
     entries.push(

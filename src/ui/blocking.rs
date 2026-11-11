@@ -71,35 +71,6 @@ fn name(app: &App, chat: &str) -> String {
     }
 }
 
-pub(super) fn confirmation(app: &mut App, ui: &mut egui::Ui, chat: &str, blocked: bool) {
-    let title = if blocked {
-        gettext(app.locale, "Block contact?")
-    } else {
-        gettext(app.locale, "Unblock contact?")
-    };
-    let body = if blocked {
-        gettext(app.locale, "Block {name}? You will no longer receive their direct messages or calls. This keeps your chat history.")
-    } else {
-        gettext(app.locale, "Unblock {name}? You will be able to exchange messages and calls again.")
-    }.replace("{name}", &name(app, chat));
-    let button = if blocked {
-        gettext(app.locale, "Block")
-    } else {
-        gettext(app.locale, "Unblock")
-    };
-    super::dialogs::confirm_destructive(
-        app,
-        ui,
-        &title,
-        &[&body],
-        &button,
-        [Action::SetBlocked {
-            chat: chat.into(),
-            blocked,
-        }],
-    );
-}
-
 pub(super) fn list(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     theme::text(

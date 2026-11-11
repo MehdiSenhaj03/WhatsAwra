@@ -918,10 +918,15 @@ impl ConversationPane {
     /// Opens the newest message's menu in the middle of the view, as a right
     /// click on it would.
     pub fn open_menu(&self, driver: &Rc<Driver>) {
-        let id = self.items.borrow().iter().rev().find_map(|item| match item {
-            Item::Message(bubble) => Some(bubble.id.clone()),
-            _ => None,
-        });
+        let id = self
+            .items
+            .borrow()
+            .iter()
+            .rev()
+            .find_map(|item| match item {
+                Item::Message(bubble) => Some(bubble.id.clone()),
+                _ => None,
+            });
         let Some(id) = id else { return };
         let entries = driver.read(|app| super::menus::message(driver, app, &id));
         let (width, height) = (self.view.width() as f64, self.view.height() as f64);

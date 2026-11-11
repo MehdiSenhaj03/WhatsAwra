@@ -13,6 +13,7 @@
 
 mod chat_list;
 mod conversation;
+mod dialogs;
 mod login;
 mod menus;
 mod shell;
@@ -253,6 +254,16 @@ pub fn run(app: App, options: Options) {
             for _ in 0..30 {
                 awra::pump();
                 std::thread::sleep(Duration::from_millis(10));
+            }
+            // Dialogs and other windows opened for the shot, beside it.
+            let stem = path.with_extension("");
+            for (index, other) in awra::Window::toplevels()
+                .iter()
+                .filter(|other| **other != window)
+                .enumerate()
+            {
+                other.render_offscreen(true);
+                other.snapshot_png(&format!("{}-win{index}.png", stem.display()));
             }
             window.render_offscreen(true);
             if !window.snapshot_png(&path.to_string_lossy()) {
