@@ -32,6 +32,7 @@ pub struct Shell {
     login: Login,
     lock: super::lock::LockScreen,
     call: super::call::CallScreen,
+    viewer: super::viewer::Viewer,
     rail: Rail,
     chats: ChatList,
     conversation: ConversationPane,
@@ -247,6 +248,8 @@ impl Shell {
         pages.add_named(&lock.root, Some("lock"));
         let call = super::call::CallScreen::build(driver, locale);
         pages.add_named(&call.root, Some("call"));
+        let viewer = super::viewer::Viewer::build(driver, locale);
+        pages.add_named(&viewer.root, Some("viewer"));
 
         let toasts = awra::ToastOverlay::new();
         toasts.set_child(Some(&pages));
@@ -260,6 +263,7 @@ impl Shell {
             login,
             lock,
             call,
+            viewer,
             rail,
             chats,
             conversation,
@@ -281,10 +285,13 @@ impl Shell {
     pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
         let locked = app.app_lock.is_locked();
         let calling = !locked && self.call.sync(app);
+        let viewing = !locked && !calling && self.viewer.sync(app);
         let page = if locked {
             "lock"
         } else if calling {
             "call"
+        } else if viewing {
+            "viewer"
         } else if app.is_linked() {
             "main"
         } else {
@@ -292,6 +299,9 @@ impl Shell {
         };
         if self.pages.visible_child_name().as_deref() != Some(page) {
             self.pages.set_visible_child_name(page);
+            if page == "viewer" {
+                self.viewer.focus();
+            }
         }
         self.sync_theme(app);
         if locked {

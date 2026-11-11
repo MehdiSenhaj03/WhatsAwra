@@ -380,12 +380,33 @@ fn click(
         let Some((id, media)) = shown.borrow().clone() else {
             return;
         };
-        let (path, loading) = match media {
-            MediaView::Picture { path, loading, .. }
-            | MediaView::Document { path, loading, .. } => (path, loading),
+        let (path, loading, video, picture) = match media {
+            MediaView::Picture {
+                path,
+                loading,
+                video,
+                ..
+            } => (path, loading, video.is_some(), true),
+            MediaView::Document { path, loading, .. } => (path, loading, false, false),
             MediaView::Voice { .. } => return,
         };
         match path {
+            // A clip plays in its bubble; a picture opens in the viewer over
+            // the chat's album; anything else goes to the system's own app.
+            Some(path) if video => driver.act(Action::PlayVideo { message: id, path }),
+            Some(path)
+                if picture
+                    && whatsawra::image_preview::open_target(&path, true)
+                        == whatsawra::image_preview::OpenTarget::Preview =>
+            {
+                let chat = driver.read(|app| app.open_chat.clone()).unwrap_or_default();
+                driver.act(Action::PreviewImage {
+                    path,
+                    chat,
+                    message: id,
+                    card: None,
+                });
+            }
             Some(path) => driver.act(Action::OpenFile(path)),
             None if !loading => {
                 let action = download(&driver, id);

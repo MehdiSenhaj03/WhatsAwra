@@ -28,6 +28,7 @@ mod pictures;
 mod rows;
 mod settings;
 mod shell;
+mod viewer;
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};

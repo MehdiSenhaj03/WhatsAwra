@@ -10,14 +10,17 @@ use std::path::{Path, PathBuf};
 /// The longest side a photo is kept at: about twice a bubble's, for sharp
 /// pictures on a high-density screen.
 pub const PHOTO_SIDE: u32 = 720;
+/// The longest side a picture is kept at in the viewer.
+pub const FULL_SIDE: u32 = 2560;
 
 #[derive(Default)]
 struct Cache {
     /// Small files read at once (profile pictures).
     files: HashMap<PathBuf, Option<awra::Texture>>,
     /// Photos decoded off the UI thread, by path.
-    photos: HashMap<PathBuf, Option<awra::Texture>>,
-    loading: HashSet<PathBuf>,
+    /// Decoded pictures by path and the longest side they were scaled to.
+    photos: HashMap<(PathBuf, u32), Option<awra::Texture>>,
+    loading: HashSet<(PathBuf, u32)>,
     /// Thumbnails sent with messages, by message id.
     thumbnails: HashMap<String, Option<awra::Texture>>,
 }
@@ -52,23 +55,38 @@ pub fn thumbnail(message: &str, jpeg: &[u8]) -> Option<awra::Texture> {
 
 /// Whether the photo at `path` is decoded (or failed to).
 pub fn photo_ready(path: &Path) -> bool {
-    CACHE.with(|cache| cache.borrow().photos.contains_key(path))
+    CACHE.with(|cache| {
+        cache
+            .borrow()
+            .photos
+            .contains_key(&(path.to_path_buf(), PHOTO_SIDE))
+    })
 }
 
 /// The photo at `path`, scaled to [`PHOTO_SIDE`] at most; `None` while it
 /// is being decoded (it starts now), or when it cannot be.
 pub fn photo(path: &Path) -> Option<awra::Texture> {
+    load(path, PHOTO_SIDE)
+}
+
+/// The picture at `path` for the viewer, up to [`FULL_SIDE`].
+pub fn full(path: &Path) -> Option<awra::Texture> {
+    load(path, FULL_SIDE)
+}
+
+fn load(path: &Path, side: u32) -> Option<awra::Texture> {
+    let key = (path.to_path_buf(), side);
     CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
-        if let Some(texture) = cache.photos.get(path) {
+        if let Some(texture) = cache.photos.get(&key) {
             return texture.clone();
         }
-        if cache.loading.insert(path.to_path_buf()) {
+        if cache.loading.insert(key.clone()) {
             let path = path.to_path_buf();
             std::thread::Builder::new()
                 .name("awra-picture".into())
                 .spawn(move || {
-                    let decoded = decode(&path);
+                    let decoded = decode(&path, side);
                     awra::glib::invoke(move || {
                         let texture = decoded.and_then(|(rgba, width, height)| {
                             awra::Texture::from_rgba(
@@ -80,8 +98,8 @@ pub fn photo(path: &Path) -> Option<awra::Texture> {
                         });
                         CACHE.with(|cache| {
                             let mut cache = cache.borrow_mut();
-                            cache.loading.remove(&path);
-                            cache.photos.insert(path, texture);
+                            cache.loading.remove(&(path.clone(), side));
+                            cache.photos.insert((path, side), texture);
                         });
                         super::wake();
                     });
@@ -93,15 +111,15 @@ pub fn photo(path: &Path) -> Option<awra::Texture> {
 }
 
 /// Reads and scales a picture to straight-alpha RGBA.
-fn decode(path: &Path) -> Option<(Vec<u8>, u32, u32)> {
+fn decode(path: &Path, side: u32) -> Option<(Vec<u8>, u32, u32)> {
     let image = image::ImageReader::open(path)
         .ok()?
         .with_guessed_format()
         .ok()?
         .decode()
         .ok()?;
-    let image = if image.width().max(image.height()) > PHOTO_SIDE {
-        image.thumbnail(PHOTO_SIDE, PHOTO_SIDE)
+    let image = if image.width().max(image.height()) > side {
+        image.thumbnail(side, side)
     } else {
         image
     };
