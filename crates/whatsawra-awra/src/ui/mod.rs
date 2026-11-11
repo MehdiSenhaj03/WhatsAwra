@@ -19,6 +19,8 @@ mod composer;
 mod conversation;
 mod dialogs;
 mod emoji;
+mod group;
+mod group_admin;
 mod info;
 mod lock;
 mod login;

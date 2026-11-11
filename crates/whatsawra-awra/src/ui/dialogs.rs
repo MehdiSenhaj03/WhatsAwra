@@ -17,7 +17,9 @@ pub trait Live {
 }
 
 pub struct Dialogs {
-    shown: Option<(Dialog, awra::Dialog)>,
+    /// The open dialog, what it was opened for, and whether a group was
+    /// being put together then (New chat turns into New group).
+    shown: Option<(Dialog, bool, awra::Dialog)>,
     /// The open dialog when it reads the app at every turn.
     chooser: Option<Box<dyn Live>>,
 }
@@ -34,21 +36,24 @@ impl Dialogs {
     /// app keeps it, and it opens again once unlocked).
     pub fn close(&mut self) {
         self.chooser = None;
-        if let Some((_, old)) = self.shown.take() {
+        if let Some((_, _, old)) = self.shown.take() {
             old.set_rust_data("closed-by-app", true);
             old.close();
         }
     }
 
     pub fn sync(&mut self, driver: &Rc<Driver>, app: &App, window: &awra::Window) {
-        if self.shown.as_ref().map(|(dialog, _)| dialog) == app.dialog.as_ref() {
+        let grouping = app.new_group.is_some();
+        if self.shown.as_ref().map(|(dialog, was, _)| (dialog, *was))
+            == app.dialog.as_ref().map(|dialog| (dialog, grouping))
+        {
             if let Some(chooser) = &mut self.chooser {
                 chooser.sync(driver, app);
             }
             return;
         }
         self.chooser = None;
-        if let Some((_, old)) = self.shown.take() {
+        if let Some((_, _, old)) = self.shown.take() {
             // Closed by the app, not the reader: say nothing back.
             old.set_rust_data("closed-by-app", true);
             old.close();
@@ -61,6 +66,7 @@ impl Dialogs {
         } else if let Some(mut chooser) = super::chooser::Chooser::of(driver, app, window, &dialog)
             .map(|chooser| Box::new(chooser) as Box<dyn Live>)
             .or_else(|| super::polls::dialog_of(driver, app, window, &dialog))
+            .or_else(|| super::group::dialog_of(driver, app, window, &dialog))
         {
             chooser.sync(driver, app);
             let shown = chooser.dialog();
@@ -70,7 +76,7 @@ impl Dialogs {
             not_yet(driver, app, window)
         };
         shown.present();
-        self.shown = Some((dialog, shown));
+        self.shown = Some((dialog, grouping, shown));
     }
 }
 

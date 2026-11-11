@@ -1,6 +1,7 @@
 //! The open chat's info, in the split view's end pane: who or what it is,
 //! the chat's quick actions, a group's description and members, and the
-//! actions that cannot be taken back.
+//! group's management for those who may, and the actions that cannot be
+//! taken back.
 
 use std::rc::Rc;
 
@@ -27,6 +28,7 @@ pub struct InfoPane {
     description: awra::Label,
     members_section: awra::Section,
     members: awra::Box,
+    admin: super::group_admin::GroupAdmin,
     block: awra::Button,
     leave: awra::Button,
     shown: Option<Shown>,
@@ -132,6 +134,9 @@ impl InfoPane {
         description_section.append(&description);
         root.append(&description_section);
 
+        let admin = super::group_admin::GroupAdmin::build(driver, locale);
+        root.append(&admin.root);
+
         let members_section = awra::Section::new();
         let members = awra::Box::new(awra::Orientation::Vertical, 2);
         members_section.append(&members);
@@ -176,6 +181,7 @@ impl InfoPane {
             description,
             members_section,
             members,
+            admin,
             block,
             leave,
             shown: None,
@@ -243,6 +249,8 @@ impl InfoPane {
             self.description.set_text(text);
         }
 
+        self.admin.sync(driver, app, chat);
+
         let blocked = app.blocklist.contains(&chat.id);
         self.block
             .set_label(Some(t(if blocked { "Unblock" } else { "Block" }).as_str()));
@@ -287,7 +295,7 @@ impl InfoPane {
             }
             for (id, name, admin) in &members {
                 self.members
-                    .append(&member_row(driver, app, id, name, *admin));
+                    .append(&member_row(driver, app, chat, id, name, *admin));
             }
             self.shown = Some(key);
         }
@@ -315,7 +323,14 @@ fn detail_of(app: &App, chat: &Chat) -> String {
 
 /// One member: their face, name and whether they are an admin; a click
 /// opens their chat.
-fn member_row(driver: &Rc<Driver>, app: &App, id: &str, name: &str, admin: bool) -> awra::Widget {
+fn member_row(
+    driver: &Rc<Driver>,
+    app: &App,
+    chat: &Chat,
+    id: &str,
+    name: &str,
+    admin: bool,
+) -> awra::Widget {
     let row = awra::Box::new(awra::Orientation::Horizontal, 10);
     let face = awra::Avatar::new(32, Some(name));
     let picture = app
@@ -335,18 +350,29 @@ fn member_row(driver: &Rc<Driver>, app: &App, id: &str, name: &str, admin: bool)
     }
     let mine = app.our_ids().contains(&id);
     if mine {
+        // Not a button: the same room as the buttons' rows around it.
+        row.set_margin_start(8);
+        row.set_margin_end(8);
+        row.set_margin_top(4);
+        row.set_margin_bottom(4);
         return row.upcast();
     }
-    let (weak, id, name) = (Rc::downgrade(driver), id.to_owned(), name.to_owned());
+    // A click opens their menu: their chat, and what an admin may do.
+    let (weak, id, name, group) = (
+        Rc::downgrade(driver),
+        id.to_owned(),
+        name.to_owned(),
+        chat.id.clone(),
+    );
+    let anchor = row.clone();
     super::rows::button(&row, false, move || {
-        if let Some(driver) = weak.upgrade() {
-            driver.act(Action::StartChat {
-                name: name.clone(),
-                id: id.clone(),
-                dismiss_dialog: false,
-            });
-            driver.act(Action::CloseInfo);
-        }
+        let Some(driver) = weak.upgrade() else { return };
+        let entries = driver.read(|app| {
+            app.chat(&group)
+                .map(|chat| super::group_admin::member_menu(&driver, app, chat, &id, &name))
+                .unwrap_or_default()
+        });
+        awra::menu::popup_at(&anchor, 40.0, 20.0, entries);
     })
     .upcast()
 }

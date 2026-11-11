@@ -14,14 +14,14 @@ use whatsawra::model::{Action, Dialog};
 
 /// One row: a face, a name and a line under it, checked or not.
 #[derive(Clone, Debug, PartialEq)]
-struct Row {
-    id: String,
-    name: String,
-    detail: String,
-    picture: Option<std::path::PathBuf>,
+pub(super) struct Row {
+    pub(super) id: String,
+    pub(super) name: String,
+    pub(super) detail: String,
+    pub(super) picture: Option<std::path::PathBuf>,
     /// `None` for a list without check boxes.
-    checked: Option<bool>,
-    action: Action,
+    pub(super) checked: Option<bool>,
+    pub(super) action: Action,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -305,7 +305,7 @@ fn forward_rows(app: &App) -> Vec<Row> {
         .collect()
 }
 
-fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::ToggleButton {
+pub(super) fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::ToggleButton {
     let line = awra::Box::new(awra::Orientation::Horizontal, 12);
     let face = awra::Avatar::new(36, Some(&row.name));
     let picture = row.picture.as_deref().and_then(super::pictures::file);
