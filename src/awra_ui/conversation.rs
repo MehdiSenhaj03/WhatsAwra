@@ -240,11 +240,16 @@ impl ConversationPane {
         let emoji = awra::Button::from_icon_name("face-smile-symbolic");
         emoji.set_appearance(awra::ButtonAppearance::Ghost);
         emoji.set_tooltip_text(Some(gettext(locale, "Emoji").as_ref()));
-        let weak = Rc::downgrade(driver);
+        // The emoji picker, made on its first opening: it inserts at the
+        // composer's cursor, and the composer's text reaches the app as typing.
+        let picker: Rc<RefCell<Option<awra::Popover>>> = Rc::default();
+        let (anchor, target) = (emoji.clone(), composer.clone());
         emoji.connect_clicked(move |_| {
-            if let Some(driver) = weak.upgrade() {
-                driver.act(Action::TogglePicker(crate::model::PickerTab::Emoji));
-            }
+            let popover = picker
+                .borrow_mut()
+                .get_or_insert_with(|| super::emoji::popover(&anchor, &target))
+                .clone();
+            popover.popup();
         });
         composer.set_end_widget(Some(&emoji));
         let weak = Rc::downgrade(driver);
