@@ -24,6 +24,7 @@ mod lock;
 mod login;
 mod media;
 mod menus;
+mod picker;
 mod pictures;
 mod rows;
 mod settings;

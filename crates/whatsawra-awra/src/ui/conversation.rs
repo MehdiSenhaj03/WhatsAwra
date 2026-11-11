@@ -114,6 +114,8 @@ pub struct ConversationPane {
     shown_chat: Option<String>,
     shown_avatar: Option<PathBuf>,
     asked: HashSet<String>,
+    picker: Rc<RefCell<Option<super::picker::Picker>>>,
+    emoji: awra::Button,
 }
 
 impl ConversationPane {
@@ -245,16 +247,19 @@ impl ConversationPane {
         let emoji = awra::Button::from_icon_name("face-smile-symbolic");
         emoji.set_appearance(awra::ButtonAppearance::Toolbar);
         emoji.set_tooltip_text(Some(gettext(locale, "Emoji").as_ref()));
-        // The emoji picker, made on its first opening: it inserts at the
-        // composer's cursor, and the composer's text reaches the app as typing.
-        let picker: Rc<RefCell<Option<awra::Popover>>> = Rc::default();
-        let (anchor, target) = (emoji.clone(), composer.clone());
+        // The picker (emoji, GIFs, stickers), made on its first opening: an
+        // emoji goes in at the composer's cursor, the rest is sent at once.
+        let picker: Rc<RefCell<Option<super::picker::Picker>>> = Rc::default();
+        let (anchor, target, made) = (emoji.clone(), composer.clone(), picker.clone());
+        let weak = Rc::downgrade(driver);
         emoji.connect_clicked(move |_| {
-            let popover = picker
-                .borrow_mut()
-                .get_or_insert_with(|| super::emoji::popover(&anchor, &target))
-                .clone();
-            popover.popup();
+            let Some(driver) = weak.upgrade() else { return };
+            let mut made = made.borrow_mut();
+            let picker = made.get_or_insert_with(|| {
+                super::picker::Picker::build(&driver, locale, &anchor, &target)
+            });
+            driver.read(|app| picker.sync(app));
+            picker.open();
         });
         let recording = super::composer::Recording::build(driver, locale);
         let ends = awra::Box::new(awra::Orientation::Horizontal, 0);
@@ -334,6 +339,8 @@ impl ConversationPane {
             shown_chat: None,
             shown_avatar: None,
             asked: HashSet::new(),
+            picker,
+            emoji,
         }
     }
 
@@ -354,6 +361,7 @@ impl ConversationPane {
         self.sync_header(app, chat, switched);
         self.sync_messages(driver, app, chat, switched);
         self.sync_composer(driver, app, chat, switched);
+        self.sync_picker(driver, app);
         self.shown_chat = Some(chat.id.clone());
     }
 
@@ -1030,5 +1038,32 @@ impl ConversationPane {
         let entries = driver.read(|app| super::menus::message(driver, app, &id));
         let (width, height) = (self.view.width() as f64, self.view.height() as f64);
         awra::menu::popup_at(&self.view, width * 0.6, height * 0.6, entries);
+    }
+}
+
+impl ConversationPane {
+    /// Keeps the open picker current, and opens it on the tab the app asks
+    /// for (a shortcut, a sample).
+    fn sync_picker(&mut self, driver: &Rc<Driver>, app: &App) {
+        let Ok(mut picker) = self.picker.try_borrow_mut() else {
+            return;
+        };
+        if picker.is_none() && app.picker.is_some() {
+            *picker = Some(super::picker::Picker::build(
+                driver,
+                app.locale,
+                &self.emoji,
+                &self.composer,
+            ));
+        }
+        let Some(picker) = picker.as_mut() else {
+            return;
+        };
+        picker.sync(app);
+        if let Some(tab) = app.picker
+            && !picker.popover.is_open()
+        {
+            picker.show(tab);
+        }
     }
 }

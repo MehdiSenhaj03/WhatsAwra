@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 pub const PHOTO_SIDE: u32 = 720;
 /// The longest side a picture is kept at in the viewer.
 pub const FULL_SIDE: u32 = 2560;
+/// The longest side of a picker tile's picture.
+pub const TILE_SIDE: u32 = 192;
 
 #[derive(Default)]
 struct Cache {
@@ -67,6 +69,11 @@ pub fn photo_ready(path: &Path) -> bool {
 /// is being decoded (it starts now), or when it cannot be.
 pub fn photo(path: &Path) -> Option<awra::Texture> {
     load(path, PHOTO_SIDE)
+}
+
+/// A tile's picture (a sticker, a GIF's still), up to [`TILE_SIDE`].
+pub fn tile(path: &Path) -> Option<awra::Texture> {
+    load(path, TILE_SIDE)
 }
 
 /// The picture at `path` for the viewer, up to [`FULL_SIDE`].

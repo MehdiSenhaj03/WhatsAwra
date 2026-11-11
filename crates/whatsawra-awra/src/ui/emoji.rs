@@ -40,9 +40,9 @@ const GROUPS: [(emojis::Group, &str, &str); 9] = [
     (emojis::Group::Flags, "Flags", "emoji-flags-symbolic"),
 ];
 
-/// A popover with the picker, anchored to `anchor`; a pick goes into
-/// `composer` at its cursor.
-pub fn popover(anchor: &awra::Button, composer: &awra::Composer) -> awra::Popover {
+/// The emoji picker; a pick goes into `composer` at its cursor, then
+/// `picked` runs.
+pub fn picker(composer: &awra::Composer, picked: impl Fn() + 'static) -> awra::EmojiPicker {
     let picker = awra::EmojiPicker::new();
     for (group, title, icon) in GROUPS {
         let store = awra::ListStore::new::<awra::EmojiItem>();
@@ -54,18 +54,13 @@ pub fn popover(anchor: &awra::Button, composer: &awra::Composer) -> awra::Popove
         }
         picker.add_section(&format!("{group:?}"), title, Some(icon), &store);
     }
-    let popover = awra::Popover::new();
-    popover.set_child(Some(&picker));
-    popover.set_parent(anchor);
-    popover.set_position(awra::PositionType::Top);
     let target = composer.clone();
-    let shown = popover.clone();
     picker.connect_picked(move |_, item| {
         if let Some(text) = item.text() {
             target.buffer().insert_at_cursor(&text);
         }
-        shown.popdown();
+        picked();
         target.view().grab_focus();
     });
-    popover
+    picker
 }
