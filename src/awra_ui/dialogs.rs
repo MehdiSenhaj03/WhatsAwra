@@ -12,16 +12,22 @@ use crate::model::{Action, Dialog};
 
 pub struct Dialogs {
     shown: Option<(Dialog, awra::Dialog)>,
+    /// The open dialog when it reads the app at every turn.
+    chooser: Option<super::chooser::Chooser>,
 }
 
 impl Dialogs {
     pub fn new() -> Self {
-        Self { shown: None }
+        Self {
+            shown: None,
+            chooser: None,
+        }
     }
 
     /// Closes the open dialog without answering it (the lock hides it; the
     /// app keeps it, and it opens again once unlocked).
     pub fn close(&mut self) {
+        self.chooser = None;
         if let Some((_, old)) = self.shown.take() {
             old.set_rust_data("closed-by-app", true);
             old.close();
@@ -30,8 +36,12 @@ impl Dialogs {
 
     pub fn sync(&mut self, driver: &Rc<Driver>, app: &App, window: &awra::Window) {
         if self.shown.as_ref().map(|(dialog, _)| dialog) == app.dialog.as_ref() {
+            if let Some(chooser) = &mut self.chooser {
+                chooser.sync(driver, app);
+            }
             return;
         }
+        self.chooser = None;
         if let Some((_, old)) = self.shown.take() {
             // Closed by the app, not the reader: say nothing back.
             old.set_rust_data("closed-by-app", true);
@@ -40,9 +50,16 @@ impl Dialogs {
         let Some(dialog) = app.dialog.clone() else {
             return;
         };
-        let shown = match crate::confirm::of(app, &dialog) {
-            Some(confirmation) => confirmation_dialog(driver, app, window, confirmation),
-            None => not_yet(driver, app, window),
+        let shown = if let Some(confirmation) = crate::confirm::of(app, &dialog) {
+            confirmation_dialog(driver, app, window, confirmation)
+        } else if let Some(mut chooser) = super::chooser::Chooser::of(driver, app, window, &dialog)
+        {
+            chooser.sync(driver, app);
+            let shown = chooser.dialog.clone();
+            self.chooser = Some(chooser);
+            shown
+        } else {
+            not_yet(driver, app, window)
         };
         shown.present();
         self.shown = Some((dialog, shown));
@@ -51,7 +68,11 @@ impl Dialogs {
 
 /// Queues `CloseDialog` when the reader closes `dialog`, unless the app
 /// closed it or a button already answered.
-fn close_on_dismiss(driver: &Rc<Driver>, dialog: &awra::Dialog, answered: Rc<Cell<bool>>) {
+pub(super) fn close_on_dismiss(
+    driver: &Rc<Driver>,
+    dialog: &awra::Dialog,
+    answered: Rc<Cell<bool>>,
+) {
     let weak = Rc::downgrade(driver);
     dialog.connect_close_request(move |dialog| {
         let by_app = dialog.rust_data::<bool>("closed-by-app").unwrap_or(false);

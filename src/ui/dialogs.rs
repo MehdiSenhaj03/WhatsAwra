@@ -562,7 +562,7 @@ fn new_chat(app: &mut App, ui: &mut egui::Ui) {
 /// The people New chat and New call offer, by name: the contacts and the
 /// one-to-one chats, without ourselves or a locked chat, matching `needle`
 /// (a `search_key`) by name or number.
-pub(super) fn contact_choices(app: &App, needle: &str) -> Vec<crate::model::Contact> {
+pub(crate) fn contact_choices(app: &App, needle: &str) -> Vec<crate::model::Contact> {
     let mut contacts = app.contacts.clone();
     for chat in &app.chats {
         if chat.kind == crate::model::ChatKind::Direct {

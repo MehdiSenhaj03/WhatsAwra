@@ -14,6 +14,7 @@
 mod call;
 mod calls;
 mod chat_list;
+mod chooser;
 mod conversation;
 mod dialogs;
 mod emoji;
