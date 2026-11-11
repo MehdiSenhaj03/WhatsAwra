@@ -11,6 +11,9 @@ use crate::app::App;
 use crate::i18n::{Locale, gettext};
 use crate::model::{Action, Chat, Dialog};
 
+/// A chat and its members (id, name, admin), as the pane last showed them.
+type Shown = (String, Vec<(String, String, bool)>);
+
 pub struct InfoPane {
     pub root: awra::Box,
     heading: awra::Label,
@@ -26,7 +29,7 @@ pub struct InfoPane {
     members: awra::Box,
     block: awra::Button,
     leave: awra::Button,
-    shown: Option<(String, Vec<(String, String, bool)>)>,
+    shown: Option<Shown>,
 }
 
 /// The chat the pane shows, read when a button is pressed.

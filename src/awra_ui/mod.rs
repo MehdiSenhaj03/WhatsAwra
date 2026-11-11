@@ -60,7 +60,7 @@ pub struct Driver {
 }
 
 thread_local! {
-    static DRIVER: RefCell<Weak<Driver>> = RefCell::new(Weak::new());
+    static DRIVER: RefCell<Weak<Driver>> = const { RefCell::new(Weak::new()) };
 }
 
 /// Options of a run.

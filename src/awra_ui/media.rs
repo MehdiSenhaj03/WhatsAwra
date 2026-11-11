@@ -100,7 +100,7 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
                 peaks: waveform.iter().map(|bar| f32::from(*bar) / top).collect(),
                 seconds: total,
                 position: (!matches!(status.state, State::Idle))
-                    .then(|| status.position.as_secs_f64()),
+                    .then_some(status.position.as_secs_f64()),
                 playing: matches!(status.state, State::Playing | State::Loading),
                 loading,
             }

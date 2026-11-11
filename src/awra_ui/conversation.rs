@@ -26,7 +26,7 @@ enum Item {
     Unread {
         label: String,
     },
-    Message(Bubble),
+    Message(Box<Bubble>),
     /// A line from WhatsApp itself (a deleted message, a timer changed).
     Notice {
         id: String,
@@ -378,10 +378,8 @@ impl ConversationPane {
 
         let mut wanted = Vec::new();
         for item in &items {
-            if let Item::Message(Bubble {
-                face: Some((id, None)),
-                ..
-            }) = item
+            if let Item::Message(bubble) = item
+                && let Some((id, None)) = &bubble.face
                 && app.avatar_unasked(id)
                 && self.asked.insert(id.clone())
             {
@@ -545,7 +543,7 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
                 None => reactions.push((reaction.emoji.clone(), 1, reaction.from_me)),
             }
         }
-        items.push(Item::Message(Bubble {
+        items.push(Item::Message(Box::new(Bubble {
             id: message.id.clone(),
             from_me: message.from_me,
             sender,
@@ -562,7 +560,7 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             reactions,
             media,
             fetch,
-        }));
+        })));
     }
     items
 }
