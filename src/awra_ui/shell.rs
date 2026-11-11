@@ -27,6 +27,10 @@ pub struct Shell {
     /// What the area beside the rail shows: the chats or a page.
     places: awra::Stack,
     settings: super::settings::SettingsPage,
+    split: awra::SplitView,
+    info: super::info::InfoPane,
+    info_scroll: awra::ScrolledWindow,
+    info_open: bool,
     /// The theme last given to Awra.
     theme: Option<crate::settings::ThemeChoice>,
     dialogs: super::dialogs::Dialogs,
@@ -149,6 +153,11 @@ impl Shell {
         split.set_sidebar(Some(&chats.root));
         split.set_sidebar_width(340);
         split.set_content(Some(&conversation.root));
+        let info = super::info::InfoPane::build(driver, locale);
+        let info_scroll = awra::ScrolledWindow::new();
+        info_scroll.set_hscrollbar_policy(awra::PolicyType::Never);
+        info_scroll.set_child(Some(&info.root));
+        split.set_end_pane_width(340);
 
         let settings = driver.read(|app| super::settings::SettingsPage::build(driver, app));
         let places = awra::Stack::new();
@@ -181,6 +190,10 @@ impl Shell {
             conversation,
             places,
             settings,
+            split,
+            info,
+            info_scroll,
+            info_open: false,
             theme: None,
             dialogs: super::dialogs::Dialogs::new(),
             shown_toasts: Vec::new(),
@@ -207,6 +220,15 @@ impl Shell {
             }
             self.chats.sync(driver, app);
             self.conversation.sync(driver, app);
+            let open = self.info.sync(driver, app);
+            if open != self.info_open {
+                if open {
+                    self.split.set_end_pane(Some(&self.info_scroll));
+                } else {
+                    self.split.set_end_pane(None::<&awra::Widget>);
+                }
+                self.info_open = open;
+            }
         } else {
             self.login.sync(app);
         }

@@ -352,11 +352,16 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
     lines.append(&bottom);
     root.append(&lines);
     let shown: Rc<RefCell<Option<Row>>> = Rc::default();
-    // A right click on a chat opens its menu.
-    let menu = awra::GestureClick::new();
-    menu.set_button(3);
+    // A click opens the chat and a right click its menu. A gesture on the
+    // row takes its clicks from the list, so the row answers both itself;
+    // the keyboard still activates through the list.
+    let click = awra::GestureClick::new();
+    click.set_button(0);
     let (weak, bound, anchor) = (driver.clone(), shown.clone(), root.clone());
-    menu.connect_pressed(move |_, _, x, y| {
+    click.connect_pressed(move |gesture, _, x, y| {
+        if gesture.current_button() != 3 {
+            return;
+        }
         let id = bound.borrow().as_ref().map(|row| row.id.clone());
         let (Some(driver), Some(id)) = (weak.upgrade(), id) else {
             return;
@@ -366,7 +371,17 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
             awra::menu::popup_at(&anchor, x, y, entries);
         }
     });
-    root.add_controller(menu);
+    let (weak, bound) = (driver.clone(), shown.clone());
+    click.connect_released(move |gesture, _, _, _| {
+        if gesture.current_button() != 1 {
+            return;
+        }
+        let id = bound.borrow().as_ref().map(|row| row.id.clone());
+        if let (Some(driver), Some(id)) = (weak.upgrade(), id) {
+            driver.act(Action::OpenChat(id));
+        }
+    });
+    root.add_controller(click);
     (
         root,
         RowWidgets {

@@ -14,6 +14,7 @@
 mod chat_list;
 mod conversation;
 mod dialogs;
+mod info;
 mod login;
 mod media;
 mod menus;
@@ -288,7 +289,15 @@ pub fn run(app: App, options: Options) {
                 other.render_offscreen(true);
                 other.snapshot_png(&format!("{}-win{index}.png", stem.display()));
             }
-            window.render_offscreen(true);
+            let drawn = window.render_offscreen(true);
+            if std::env::var_os("WHATSAWRA_SHOT_DEBUG").is_some() {
+                let (min, natural, _, _) = window.measure(awra::Orientation::Horizontal, -1);
+                eprintln!(
+                    "render {drawn}, window {}x{}, width min {min} natural {natural}",
+                    window.width(),
+                    window.height()
+                );
+            }
             if !window.snapshot_png(&path.to_string_lossy()) {
                 log::error!("could not write {}", path.display());
             }
