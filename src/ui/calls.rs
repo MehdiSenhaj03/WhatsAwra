@@ -157,7 +157,7 @@ pub fn rows(calls: &[Message]) -> Vec<Vec<&Message>> {
 
 /// The calls the Calls tab lists: a locked chat's stay out while its folder
 /// is closed.
-fn visible_calls(app: &App) -> Vec<Message> {
+pub(crate) fn visible_calls(app: &App) -> Vec<Message> {
     app.call_log
         .iter()
         .filter(|message| {
@@ -170,7 +170,7 @@ fn visible_calls(app: &App) -> Vec<Message> {
 
 /// The name a row of the history goes by: its chat's, or "Call link" for
 /// the calls joined through one, which belong to no chat.
-fn row_name(app: &App, chat: &str) -> String {
+pub(crate) fn row_name(app: &App, chat: &str) -> String {
     if chat == crate::model::CALL_LINK_CHAT {
         gettext(app.locale, "Call link").into_owned()
     } else {
@@ -479,7 +479,7 @@ fn history_row(app: &mut App, ui: &mut egui::Ui, row: &[Message], actions: &mut 
 /// What a call was and how it went, on one line: "Video call · 12 min 34 s", with how many
 /// people were on a group call once its record says: "Group video call · 12 min 34 s ·
 /// 4 participants".
-fn summary(entry: &Entry, locale: Locale) -> String {
+pub(crate) fn summary(entry: &Entry, locale: Locale) -> String {
     let mut text = match entry.detail(locale) {
         Some(detail) => format!("{} · {detail}", entry.title(locale)),
         None => entry.title(locale),

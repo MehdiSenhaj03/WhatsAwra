@@ -27,6 +27,9 @@ pub struct Shell {
     /// What the area beside the rail shows: the chats or a page.
     places: awra::Stack,
     settings: super::settings::SettingsPage,
+    /// The list beside the open chat: the chats, or the call history.
+    lists: awra::Stack,
+    calls: super::calls::CallList,
     split: awra::SplitView,
     info: super::info::InfoPane,
     info_scroll: awra::ScrolledWindow,
@@ -150,7 +153,11 @@ impl Shell {
         let login = Login::build(driver, locale);
 
         let split = awra::SplitView::new();
-        split.set_sidebar(Some(&chats.root));
+        let calls = super::calls::CallList::build(driver, locale);
+        let lists = awra::Stack::new();
+        lists.add_named(&chats.root, Some("chats"));
+        lists.add_named(&calls.root, Some("calls"));
+        split.set_sidebar(Some(&lists));
         split.set_sidebar_width(340);
         split.set_content(Some(&conversation.root));
         let info = super::info::InfoPane::build(driver, locale);
@@ -190,6 +197,8 @@ impl Shell {
             conversation,
             places,
             settings,
+            lists,
+            calls,
             split,
             info,
             info_scroll,
@@ -218,7 +227,19 @@ impl Shell {
             if place == "settings" {
                 self.settings.sync(app);
             }
-            self.chats.sync(driver, app);
+            let list = if app.page == Page::Calls {
+                "calls"
+            } else {
+                "chats"
+            };
+            if self.lists.visible_child_name().as_deref() != Some(list) {
+                self.lists.set_visible_child_name(list);
+            }
+            if list == "calls" {
+                self.calls.sync(driver, app);
+            } else {
+                self.chats.sync(driver, app);
+            }
             self.conversation.sync(driver, app);
             let open = self.info.sync(driver, app);
             if open != self.info_open {
