@@ -3,7 +3,8 @@
 //!
 //! `--demo` shows the synthetic offline sample (with the `demo` feature);
 //! `--shot <png>` renders the window offscreen to a picture and quits;
-//! `--size WxH` sets the shot's size; `--open <n>` opens the n-th chat.
+//! `--size WxH` sets the shot's size; `--open <n>` opens the n-th chat;
+//! `--page <flags>` applies the demo's sample states (as `whatsawra --demo-page`).
 #![windows_subsystem = "windows"]
 
 use std::path::PathBuf;
@@ -39,6 +40,26 @@ fn main() {
         Some(root) => paths::AppDirs::under(root),
         None => paths::AppDirs::discover(),
     };
+    let waker = whatsawra::backend::Waker::default();
+    // One copy of WhatsAwra at a time owns the account's session and
+    // archive, whichever window it draws: a second launch asks the running
+    // one to show itself. Demo runs keep to their own folder.
+    let instance = if demo {
+        None
+    } else {
+        use whatsawra::single_instance::{Outcome, acquire};
+        match acquire(&dirs.runtime, &waker, "show") {
+            Outcome::Only(guard) => Some(guard),
+            Outcome::Surfaced => {
+                eprintln!("WhatsAwra is already running; asked it to show its window");
+                return;
+            }
+            Outcome::Outdated | Outcome::Unanswered => {
+                eprintln!("WhatsAwra is already running");
+                return;
+            }
+        }
+    };
     if let Err(error) = dirs.ensure() {
         eprintln!("WhatsAwra cannot create its folders: {error}");
         std::process::exit(1);
@@ -56,7 +77,6 @@ fn main() {
     }
     let settings = settings::Settings::load(&dirs.settings_file());
 
-    let waker = whatsawra::backend::Waker::default();
     #[allow(unused_mut)]
     let mut app = if demo {
         app::App::headless(dirs, settings).0
@@ -69,9 +89,13 @@ fn main() {
             }
         }
     };
+    if let Some(guard) = &instance {
+        app.set_remote_control(guard);
+    }
     #[cfg(feature = "demo")]
     if demo {
         whatsawra::demo::populate(&mut app);
+        whatsawra::demo::apply_flags(&mut app, arg_value(&args, "--page").as_deref());
     }
     if let Some(index) = arg_value(&args, "--open").and_then(|n| n.parse::<usize>().ok())
         && let Some(chat) = app.visible_chats().get(index).map(|chat| chat.id.clone())
@@ -86,6 +110,7 @@ fn main() {
             waker: Some(waker),
         },
     );
+    drop(instance);
     if let Some(root) = demo_root {
         let _ = std::fs::remove_dir_all(root);
     }
