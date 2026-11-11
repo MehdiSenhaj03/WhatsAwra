@@ -1,0 +1,8 @@
+current: v0.21.0
+items:
+  - id: v0.21.0
+    title: v0.21.0
+    url: /download/
+  - title: Changelog
+    url: https://github.com/crmne/whatsawra/releases
+    external: true
