@@ -8,10 +8,10 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::Driver;
-use crate::app::App;
-use crate::i18n::{Locale, gettext};
-use crate::model::{Action, Dialog};
-use crate::settings::ThemeChoice;
+use whatsawra::app::App;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::{Action, Dialog};
+use whatsawra::settings::ThemeChoice;
 
 /// A switch and how to read and write its setting.
 struct Toggle {
@@ -37,11 +37,6 @@ impl SettingsPage {
         let t = |text: &'static str| gettext(locale, text).into_owned();
         let column = awra::Box::new(awra::Orientation::Vertical, 24);
         let mut toggles = Vec::new();
-
-        let title = awra::Label::new(Some(&t("Settings")));
-        title.set_typography(awra::Typography::Title1);
-        title.set_xalign(0.0);
-        column.append(&title);
 
         // Appearance
         let appearance = section(&column, &t("Appearance"));
@@ -106,7 +101,7 @@ impl SettingsPage {
                 app.account_mut().mark_settings_dirty();
             },
         ));
-        if crate::media_pause::SUPPORTED {
+        if whatsawra::media_pause::SUPPORTED {
             toggles.push(toggle(
                 driver,
                 &chats,

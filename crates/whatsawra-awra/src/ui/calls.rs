@@ -7,10 +7,10 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::Driver;
-use crate::app::App;
-use crate::i18n::{Locale, gettext};
-use crate::model::{Action, CallFilter};
-use crate::ui::calls::{Entry, row_name, rows, summary, visible_calls};
+use whatsawra::app::App;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::{Action, CallFilter};
+use whatsawra::ui::calls::{Entry, row_name, rows, summary, visible_calls};
 
 /// What one row shows.
 #[derive(Clone, Debug, PartialEq)]
@@ -42,13 +42,6 @@ impl CallList {
     pub fn build(driver: &Rc<Driver>, locale: Locale) -> Self {
         let root = awra::Box::new(awra::Orientation::Vertical, 8);
         root.set_margin_top(8);
-        let title = awra::Label::new(Some(gettext(locale, "Calls").as_ref()));
-        title.set_typography(awra::Typography::Title3);
-        title.set_xalign(0.0);
-        title.set_margin_start(16);
-        title.set_margin_top(6);
-        title.set_margin_bottom(6);
-        root.append(&title);
 
         let chip_row = awra::Box::new(awra::Orientation::Horizontal, 6);
         chip_row.set_margin_start(12);
@@ -106,17 +99,17 @@ impl CallList {
                 if app.call_filter == CallFilter::Missed && !entry.missed() {
                     return None;
                 }
-                let link = newest.chat == crate::model::CALL_LINK_CHAT;
-                let group_chat = crate::model::ChatKind::from_id(&newest.chat)
-                    == crate::model::ChatKind::Group
-                    && crate::calls::group_calls_enabled();
+                let link = newest.chat == whatsawra::model::CALL_LINK_CHAT;
+                let group_chat = whatsawra::model::ChatKind::from_id(&newest.chat)
+                    == whatsawra::model::ChatKind::Group
+                    && whatsawra::calls::group_calls_enabled();
                 Some(Row {
                     chat: newest.chat.clone(),
                     message: newest.id.clone(),
                     name: row_name(app, &newest.chat),
                     count: row.len(),
                     summary: summary(&entry, locale),
-                    stamp: crate::util::chat_stamp(locale, newest.timestamp),
+                    stamp: whatsawra::util::chat_stamp(locale, newest.timestamp),
                     missed: entry.missed(),
                     video: entry.video,
                     outgoing: entry.from_me,
@@ -143,15 +136,8 @@ impl CallList {
     }
 }
 
-fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::Box {
+fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::Widget {
     let line = awra::Box::new(awra::Orientation::Horizontal, 12);
-    line.set_margin_top(4);
-    line.set_margin_bottom(4);
-    line.set_margin_start(6);
-    line.set_margin_end(6);
-    if row.picked {
-        awra::add_style_role(&line, "chosen-row");
-    }
     let avatar = awra::Avatar::new(40, Some(&row.name));
     let picture = row.picture.as_deref().and_then(super::pictures::file);
     avatar.set_custom_image(picture.as_ref());
@@ -212,18 +198,18 @@ fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::Box {
         });
         line.append(&back);
     }
-    let click = awra::GestureClick::new();
+    // A call by link belongs to no chat: its row opens nothing.
+    if row.chat == whatsawra::model::CALL_LINK_CHAT {
+        return line.upcast();
+    }
     let (weak, chat, message) = (Rc::downgrade(driver), row.chat.clone(), row.message.clone());
-    click.connect_released(move |_, _, _, _| {
+    super::rows::button(&line, row.picked, move || {
         if let Some(driver) = weak.upgrade() {
             driver.act(Action::PickCall {
                 chat: chat.clone(),
                 message: message.clone(),
             });
         }
-    });
-    if row.chat != crate::model::CALL_LINK_CHAT {
-        line.add_controller(click);
-    }
-    line
+    })
+    .upcast()
 }

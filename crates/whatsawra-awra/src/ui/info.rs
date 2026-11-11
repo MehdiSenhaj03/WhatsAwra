@@ -7,9 +7,9 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::Driver;
-use crate::app::App;
-use crate::i18n::{Locale, gettext};
-use crate::model::{Action, Chat, Dialog};
+use whatsawra::app::App;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::{Action, Chat, Dialog};
 
 /// A chat and its members (id, name, admin), as the pane last showed them.
 type Shown = (String, Vec<(String, String, bool)>);
@@ -108,7 +108,9 @@ impl InfoPane {
             vec![Action::StartVideoCall(chat)]
         });
         let mute = quick_button("audio-volume-muted-symbolic", "Mute", |chat, app| {
-            let muted = app.chat(&chat).is_some_and(|c| c.muted(crate::util::now()));
+            let muted = app
+                .chat(&chat)
+                .is_some_and(|c| c.muted(whatsawra::util::now()));
             vec![Action::SetMuted(chat, if muted { None } else { Some(0) })]
         });
         let pin = quick_button("view-pin-symbolic", "Pin to top", |chat, app| {
@@ -211,7 +213,7 @@ impl InfoPane {
         self.name.set_text(&title);
         self.detail.set_text(&detail_of(app, chat));
 
-        let now = crate::util::now();
+        let now = whatsawra::util::now();
         self.mute.set_icon_name(Some(if chat.muted(now) {
             "audio-volume-high-symbolic"
         } else {
@@ -247,7 +249,11 @@ impl InfoPane {
         self.block.set_visible(
             !group
                 && !chat.is_channel()
-                && crate::blocking::eligible(&chat.id, app.me.as_deref(), app.me_lid.as_deref()),
+                && whatsawra::blocking::eligible(
+                    &chat.id,
+                    app.me.as_deref(),
+                    app.me_lid.as_deref(),
+                ),
         );
         self.leave
             .set_visible(group && chat.can_leave(&app.our_ids()));
@@ -267,7 +273,7 @@ impl InfoPane {
         let key = (chat.id.clone(), members.clone());
         if self.shown.as_ref() != Some(&key) {
             self.members_section.set_title(Some(
-                crate::i18n::ngettext(
+                whatsawra::i18n::ngettext(
                     locale,
                     "{count} member",
                     "{count} members",
@@ -296,7 +302,7 @@ fn detail_of(app: &App, chat: &Chat) -> String {
         if count == 0 {
             return gettext(app.locale, "Group").into_owned();
         }
-        return crate::i18n::ngettext(
+        return whatsawra::i18n::ngettext(
             app.locale,
             "Group · {count} member",
             "Group · {count} members",
@@ -304,15 +310,13 @@ fn detail_of(app: &App, chat: &Chat) -> String {
         )
         .replace("{count}", &count.to_string());
     }
-    chat.phone().map(crate::util::phone).unwrap_or_default()
+    chat.phone().map(whatsawra::util::phone).unwrap_or_default()
 }
 
 /// One member: their face, name and whether they are an admin; a click
 /// opens their chat.
 fn member_row(driver: &Rc<Driver>, app: &App, id: &str, name: &str, admin: bool) -> awra::Widget {
     let row = awra::Box::new(awra::Orientation::Horizontal, 10);
-    row.set_margin_top(3);
-    row.set_margin_bottom(3);
     let face = awra::Avatar::new(32, Some(name));
     let picture = app
         .avatar_path(id)
@@ -330,20 +334,19 @@ fn member_row(driver: &Rc<Driver>, app: &App, id: &str, name: &str, admin: bool)
         row.append(&badge);
     }
     let mine = app.our_ids().contains(&id);
-    if !mine {
-        let click = awra::GestureClick::new();
-        let (weak, id, name) = (Rc::downgrade(driver), id.to_owned(), name.to_owned());
-        click.connect_released(move |_, _, _, _| {
-            if let Some(driver) = weak.upgrade() {
-                driver.act(Action::StartChat {
-                    name: name.clone(),
-                    id: id.clone(),
-                    dismiss_dialog: false,
-                });
-                driver.act(Action::CloseInfo);
-            }
-        });
-        row.add_controller(click);
+    if mine {
+        return row.upcast();
     }
-    row.upcast()
+    let (weak, id, name) = (Rc::downgrade(driver), id.to_owned(), name.to_owned());
+    super::rows::button(&row, false, move || {
+        if let Some(driver) = weak.upgrade() {
+            driver.act(Action::StartChat {
+                name: name.clone(),
+                id: id.clone(),
+                dismiss_dialog: false,
+            });
+            driver.act(Action::CloseInfo);
+        }
+    })
+    .upcast()
 }

@@ -9,10 +9,10 @@ use std::sync::Arc;
 use awra::prelude::*;
 
 use super::Driver;
-use crate::app::App;
-use crate::calls::CallPhase;
-use crate::i18n::{Locale, gettext};
-use crate::model::Action;
+use whatsawra::app::App;
+use whatsawra::calls::CallPhase;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::Action;
 
 /// The widest our own picture is drawn, in a corner.
 const LOCAL_WIDTH: usize = 220;
@@ -211,7 +211,8 @@ impl CallScreen {
             self.avatar.set_custom_image(picture.as_ref());
             self.shown_chat = Some(call.chat.clone());
         }
-        self.status.set_text(&crate::ui::call::status(locale, call));
+        self.status
+            .set_text(&whatsawra::ui::call::status(locale, call));
         let incoming = call.phase == CallPhase::Incoming;
         let over = matches!(call.phase, CallPhase::Ended | CallPhase::Failed);
         self.ringing.set_visible(incoming);

@@ -8,9 +8,9 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::Driver;
-use crate::app::App;
-use crate::i18n::{gettext, ngettext};
-use crate::model::{Action, Dialog};
+use whatsawra::app::App;
+use whatsawra::i18n::{gettext, ngettext};
+use whatsawra::model::{Action, Dialog};
 
 /// One row: a face, a name and a line under it, checked or not.
 #[derive(Clone, Debug, PartialEq)]
@@ -245,7 +245,7 @@ impl Chooser {
 }
 
 fn new_chat_rows(app: &App) -> Vec<Row> {
-    let needle = crate::util::search_key(app.new_chat_search.trim());
+    let needle = whatsawra::util::search_key(app.new_chat_search.trim());
     let mut rows = Vec::new();
     if app.offers_self(&needle) {
         rows.push(Row {
@@ -257,11 +257,11 @@ fn new_chat_rows(app: &App) -> Vec<Row> {
             action: Action::MessageYourself,
         });
     }
-    for contact in crate::ui::dialogs::contact_choices(app, &needle) {
+    for contact in whatsawra::ui::dialogs::contact_choices(app, &needle) {
         let name = app.display_name(&contact.id);
         rows.push(Row {
-            detail: crate::model::phone_of(&contact.id)
-                .map(crate::util::phone)
+            detail: whatsawra::model::phone_of(&contact.id)
+                .map(whatsawra::util::phone)
                 .unwrap_or_default(),
             picture: app.avatar_path(&contact.id),
             checked: None,
@@ -281,7 +281,9 @@ fn forward_rows(app: &App) -> Vec<Row> {
     let needle = app.forward_search.trim().to_lowercase();
     app.chats
         .iter()
-        .filter(|chat| crate::ui::dialogs::forwardable(chat) && !app.blocklist.contains(&chat.id))
+        .filter(|chat| {
+            whatsawra::ui::dialogs::forwardable(chat) && !app.blocklist.contains(&chat.id)
+        })
         .filter(|chat| {
             needle.is_empty()
                 || app.chat_title(chat).to_lowercase().contains(&needle)
@@ -294,7 +296,7 @@ fn forward_rows(app: &App) -> Vec<Row> {
             detail: if chat.is_group() {
                 gettext(app.locale, "Group").into_owned()
             } else {
-                chat.phone().map(crate::util::phone).unwrap_or_default()
+                chat.phone().map(whatsawra::util::phone).unwrap_or_default()
             },
             picture: app.avatar_path(&chat.id),
             checked: Some(app.forward_recipients.contains(&chat.id)),
@@ -303,12 +305,8 @@ fn forward_rows(app: &App) -> Vec<Row> {
         .collect()
 }
 
-fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::Box {
+fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::ToggleButton {
     let line = awra::Box::new(awra::Orientation::Horizontal, 12);
-    line.set_margin_top(4);
-    line.set_margin_bottom(4);
-    line.set_margin_start(4);
-    line.set_margin_end(4);
     let face = awra::Avatar::new(36, Some(&row.name));
     let picture = row.picture.as_deref().and_then(super::pictures::file);
     face.set_custom_image(picture.as_ref());
@@ -335,13 +333,10 @@ fn row_widget(driver: &Rc<Driver>, row: &Row) -> awra::Box {
         check.set_valign(awra::Align::Center);
         line.append(&check);
     }
-    let click = awra::GestureClick::new();
     let (weak, action) = (Rc::downgrade(driver), row.action.clone());
-    click.connect_released(move |_, _, _, _| {
+    super::rows::button(&line, false, move || {
         if let Some(driver) = weak.upgrade() {
             driver.act(action.clone());
         }
-    });
-    line.add_controller(click);
-    line
+    })
 }

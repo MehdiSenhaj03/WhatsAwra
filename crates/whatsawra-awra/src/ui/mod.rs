@@ -15,6 +15,7 @@ mod call;
 mod calls;
 mod chat_list;
 mod chooser;
+mod composer;
 mod conversation;
 mod dialogs;
 mod emoji;
@@ -24,6 +25,7 @@ mod login;
 mod media;
 mod menus;
 mod pictures;
+mod rows;
 mod settings;
 mod shell;
 
@@ -31,8 +33,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
-use crate::app::App;
-use crate::model::Action;
+use whatsawra::app::App;
+use whatsawra::model::Action;
 
 /// A change a view asks of the app.
 pub enum Op {
@@ -57,10 +59,14 @@ pub struct Driver {
     /// otherwise queue the very values the views just wrote.
     syncing: Cell<bool>,
     demo: Cell<bool>,
+    /// When the last turn ended.
+    turn_started: Cell<Instant>,
 }
 
 thread_local! {
     static DRIVER: RefCell<Weak<Driver>> = const { RefCell::new(Weak::new()) };
+    /// Turns taken, for WHATSAWRA_TURNS (how often the window wakes).
+    static TURNS: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Options of a run.
@@ -72,7 +78,7 @@ pub struct Options {
     /// Window size for a shot.
     pub size: Option<(i32, i32)>,
     /// The waker the app's backends were made with, which wakes this loop.
-    pub waker: Option<crate::backend::Waker>,
+    pub waker: Option<whatsawra::backend::Waker>,
     /// The offline sample: the commands the views send are answered here,
     /// as the egui demo answers them.
     pub demo: bool,
@@ -94,6 +100,7 @@ impl Driver {
             shell: RefCell::new(None),
             syncing: Cell::new(false),
             demo: Cell::new(false),
+            turn_started: Cell::new(Instant::now()),
         });
         DRIVER.with(|slot| *slot.borrow_mut() = Rc::downgrade(&driver));
         // The app's waker and its timed requests reach Awra's loop from any
@@ -191,6 +198,7 @@ impl Driver {
     /// One turn: the views' ops, the app's events and actions, then the
     /// views read the result.
     fn turn(self: &Rc<Self>) {
+        TURNS.with(|turns| turns.set(turns.get() + 1));
         let focused = self.focused();
         {
             let mut app = self.app.borrow_mut();
@@ -214,10 +222,21 @@ impl Driver {
             output.textures_delta.clear();
             #[cfg(feature = "demo")]
             if self.demo.get() {
-                crate::demo::tour::respond(&mut app);
+                whatsawra::demo::tour::respond(&mut app);
             }
         }
+        let synced = Instant::now();
         self.sync();
+        // A turn that takes a frame or more is what makes the window lag.
+        let took = synced.elapsed();
+        let whole = self.turn_started.replace(Instant::now()).elapsed();
+        if took > Duration::from_millis(12) {
+            log::debug!(
+                "slow turn: views {} ms, {} ms since the last turn",
+                took.as_millis(),
+                whole.as_millis()
+            );
+        }
     }
 
     /// Lets the views read the app and update their widgets.
@@ -322,6 +341,13 @@ pub fn run(app: App, options: Options) {
                 awra::quit();
                 awra::glib::Propagation::Proceed
             });
+            if std::env::var_os("WHATSAWRA_TURNS").is_some() {
+                awra::glib::timeout_add_local(Duration::from_secs(1), || {
+                    let turns = TURNS.with(|turns| turns.replace(0));
+                    eprintln!("turns in the last second: {turns}");
+                    awra::glib::ControlFlow::Continue
+                });
+            }
             awra::run();
         }
     }

@@ -48,11 +48,24 @@ impl App {
     }
 
     /// The profile picture on disk for `id`, without asking for one.
+    /// The views ask at every turn for every row, so a picture looked for on
+    /// disk is looked for once: one that arrives later lands in `avatars`.
     pub fn avatar_path(&self, id: &str) -> Option<std::path::PathBuf> {
-        match self.avatars.get(id) {
-            Some(known) => known.clone(),
-            None => self.cached_avatar(id),
+        if let Some(known) = self.avatars.get(id) {
+            return known.clone();
         }
+        thread_local! {
+            static ON_DISK: std::cell::RefCell<std::collections::HashMap<(String, String), Option<std::path::PathBuf>>> =
+                std::cell::RefCell::default();
+        }
+        let key = (self.account().id.0.clone(), id.to_owned());
+        ON_DISK.with(|cache| {
+            cache
+                .borrow_mut()
+                .entry(key)
+                .or_insert_with(|| self.cached_avatar(id))
+                .clone()
+        })
     }
 
     /// Whether nobody has asked WhatsApp for `id`'s picture yet.

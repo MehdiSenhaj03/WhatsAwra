@@ -8,9 +8,9 @@ use std::rc::{Rc, Weak};
 use awra::prelude::*;
 
 use super::{Driver, Op, pictures};
-use crate::app::App;
-use crate::audio::State;
-use crate::model::{Action, Content, MediaState, Message};
+use whatsawra::app::App;
+use whatsawra::audio::State;
+use whatsawra::model::{Action, Content, MediaState, Message};
 
 /// The widest a picture is drawn in a bubble, and the tallest.
 const PICTURE_WIDTH: f64 = 300.0;
@@ -83,7 +83,7 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
         Content::Sticker { .. } => picture(true, None),
         Content::Video { seconds, .. } => picture(
             false,
-            Some(seconds.map(crate::util::duration).unwrap_or_default()),
+            Some(seconds.map(whatsawra::util::duration).unwrap_or_default()),
         ),
         Content::Audio {
             seconds, waveform, ..
@@ -108,7 +108,7 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
         Content::Document {
             file_name, pages, ..
         } => {
-            let mut detail = crate::util::bytes(media.size);
+            let mut detail = whatsawra::util::bytes(media.size);
             if let Some(pages) = pages {
                 detail = format!("{pages} pages · {detail}");
             }
@@ -327,7 +327,7 @@ impl MediaWidgets {
                 }));
                 self.play.set_busy(*loading);
                 let shown = position.unwrap_or(*seconds).max(0.0) as u32;
-                self.voice_time.set_text(&crate::util::duration(shown));
+                self.voice_time.set_text(&whatsawra::util::duration(shown));
             }
             MediaView::Document {
                 name,

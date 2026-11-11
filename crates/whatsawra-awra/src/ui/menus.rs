@@ -7,10 +7,10 @@ use std::rc::Rc;
 use awra::menu::Entry;
 
 use super::Driver;
-use crate::app::App;
-use crate::i18n::gettext;
-use crate::model::{Action, Content, Dialog};
-use crate::ui::conversation::{
+use whatsawra::app::App;
+use whatsawra::i18n::gettext;
+use whatsawra::model::{Action, Content, Dialog};
+use whatsawra::ui::conversation::{
     can_reply, copyable_text, delete_for_everyone_action, delete_for_me_action, forward_action,
 };
 
@@ -83,7 +83,7 @@ pub fn message(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
             .push(Entry::submenu(gettext(locale, "React"), reactions).icon("face-smile-symbolic"));
     }
     if let Some(text) = copyable_text(&message.content) {
-        let plain = crate::markup::plain(&text, &app.mention_list(message));
+        let plain = whatsawra::markup::plain(&text, &app.mention_list(message));
         entries.push(
             item(
                 driver,
@@ -93,7 +93,7 @@ pub fn message(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
             .icon("edit-copy-symbolic"),
         );
     }
-    if crate::app::can_select(&message.content) {
+    if whatsawra::app::can_select(&message.content) {
         entries.push(
             item(
                 driver,
@@ -145,7 +145,7 @@ pub fn message(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
             .icon("view-pin-symbolic"),
         );
     }
-    if crate::app::can_select(&message.content) {
+    if whatsawra::app::can_select(&message.content) {
         entries.push(
             item(
                 driver,
@@ -226,7 +226,7 @@ pub fn chat(driver: &Rc<Driver>, app: &App, id: &str) -> Vec<Entry> {
         return Vec::new();
     };
     let id = chat.id.clone();
-    let now = crate::util::now();
+    let now = whatsawra::util::now();
     let mut entries = Vec::new();
     entries.push(
         item(

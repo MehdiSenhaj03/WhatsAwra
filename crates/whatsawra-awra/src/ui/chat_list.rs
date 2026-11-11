@@ -10,9 +10,9 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::{Driver, Op};
-use crate::app::App;
-use crate::i18n::{Locale, gettext};
-use crate::model::{Action, Chat, ChatFilter, Delivery};
+use whatsawra::app::App;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::{Action, Chat, ChatFilter, Delivery};
 
 /// What one row shows, read from the app at each turn.
 #[derive(Clone, Debug, PartialEq)]
@@ -36,6 +36,7 @@ struct Row {
 /// The widgets of one row, kept on the row's root.
 #[derive(Clone)]
 struct RowWidgets {
+    button: awra::ToggleButton,
     avatar: awra::Avatar,
     title: awra::Label,
     stamp: awra::Label,
@@ -48,6 +49,9 @@ struct RowWidgets {
 
 pub struct ChatList {
     pub root: awra::Box,
+    /// The title and New chat, for the window's header.
+    pub heading: awra::Box,
+    new_chat: awra::Button,
     search: awra::SearchEntry,
     chips: Vec<(ChatFilter, awra::Chip)>,
     store: awra::ListStore,
@@ -64,9 +68,9 @@ impl ChatList {
         let root = awra::Box::new(awra::Orientation::Vertical, 8);
         root.set_margin_top(8);
 
+        // The list's heading sits in the window's header (the shell puts it
+        // there), over the list.
         let heading = awra::Box::new(awra::Orientation::Horizontal, 8);
-        heading.set_margin_start(16);
-        heading.set_margin_end(8);
         let title = awra::Label::new(Some(gettext(locale, "Chats").as_ref()));
         title.set_typography(awra::Typography::Title3);
         title.set_xalign(0.0);
@@ -76,7 +80,6 @@ impl ChatList {
         new_chat.set_appearance(awra::ButtonAppearance::Ghost);
         new_chat.set_tooltip_text(Some(gettext(locale, "New chat").as_ref()));
         heading.append(&new_chat);
-        root.append(&heading);
 
         let search = awra::SearchEntry::new();
         search.set_placeholder_text(Some(gettext(locale, "Search or start a new chat").as_ref()));
@@ -167,12 +170,14 @@ impl ChatList {
         let weak = Rc::downgrade(driver);
         new_chat.connect_clicked(move |_| {
             if let Some(driver) = weak.upgrade() {
-                driver.act(Action::ShowDialog(crate::model::Dialog::NewChat));
+                driver.act(Action::ShowDialog(whatsawra::model::Dialog::NewChat));
             }
         });
 
         Self {
             root,
+            heading,
+            new_chat,
             search,
             chips,
             store,
@@ -184,15 +189,24 @@ impl ChatList {
         }
     }
 
-    pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
-        let heading = if app.show_starred {
-            gettext(app.locale, "Starred")
-        } else if app.show_archived {
-            gettext(app.locale, "Archived")
-        } else {
-            gettext(app.locale, "Chats")
+    /// The heading in the window's header names the place on screen, on
+    /// every page.
+    pub fn sync_heading(&self, app: &App) {
+        let heading = match app.page {
+            whatsawra::model::Page::Calls => gettext(app.locale, "Calls"),
+            whatsawra::model::Page::Settings | whatsawra::model::Page::Wallpaper => {
+                gettext(app.locale, "Settings")
+            }
+            _ if app.show_starred => gettext(app.locale, "Starred"),
+            _ if app.show_archived => gettext(app.locale, "Archived"),
+            _ => gettext(app.locale, "Chats"),
         };
         self.title.set_text(heading.as_ref());
+        self.new_chat
+            .set_visible(app.page == whatsawra::model::Page::Chats);
+    }
+
+    pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
         if self.search.text() != app.search {
             self.search.set_text(&app.search);
         }
@@ -220,21 +234,15 @@ impl ChatList {
         }
 
         let old = self.rows.borrow().clone();
-        let same_ids = old.len() == rows.len() && old.iter().zip(&rows).all(|(a, b)| a.id == b.id);
         *self.rows.borrow_mut() = rows.clone();
-        if same_ids {
-            for (position, (before, after)) in old.iter().zip(&rows).enumerate() {
-                if before != after {
-                    self.list.rebind(position as u32);
-                }
-            }
-        } else {
-            let items: Vec<awra::Object> = rows
-                .iter()
-                .map(|row| awra::Object::new(awra::StringObject(row.id.clone())))
-                .collect();
-            self.store.splice(0, self.store.n_items(), &items);
-        }
+        let list = self.list.clone();
+        super::rows::update(
+            &self.store,
+            &old,
+            &rows,
+            |row| row.id.as_str(),
+            |position| list.rebind(position),
+        );
 
         let nothing = rows.is_empty();
         self.empty.set_visible(nothing);
@@ -262,7 +270,7 @@ impl ChatList {
 
 fn row_of(app: &App, chat: &Chat) -> Row {
     let locale = app.locale;
-    let preview = if let Some(activity) = crate::present::activity_preview(app, chat) {
+    let preview = if let Some(activity) = whatsawra::present::activity_preview(app, chat) {
         activity
     } else if let Some(draft) = app.draft_preview(&chat.id) {
         format!("{} {draft}", gettext(locale, "Draft:"))
@@ -285,14 +293,14 @@ fn row_of(app: &App, chat: &Chat) -> Row {
         title: app.chat_title(chat),
         preview: preview.replace('\n', " "),
         stamp: if chat.last_activity > 0 {
-            crate::util::chat_stamp(locale, chat.last_activity)
+            whatsawra::util::chat_stamp(locale, chat.last_activity)
         } else {
             String::new()
         },
         unread: chat.unread,
         marked_unread: chat.marked_unread,
         mention: chat.unread_mention.is_some(),
-        muted: chat.muted(crate::util::now()),
+        muted: chat.muted(whatsawra::util::now()),
         pinned: chat.pinned,
         group: chat.is_group(),
         avatar: app.avatar_path(&chat.id),
@@ -305,15 +313,11 @@ fn row_of(app: &App, chat: &Chat) -> Row {
     }
 }
 
-fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
-    let root = awra::Box::new(awra::Orientation::Horizontal, 12);
-    root.set_margin_top(6);
-    root.set_margin_bottom(6);
-    root.set_margin_start(8);
-    root.set_margin_end(8);
+fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::ToggleButton, RowWidgets) {
+    let content = awra::Box::new(awra::Orientation::Horizontal, 12);
     let avatar = awra::Avatar::new(44, None);
     avatar.set_valign(awra::Align::Center);
-    root.append(&avatar);
+    content.append(&avatar);
 
     let lines = awra::Box::new(awra::Orientation::Vertical, 2);
     lines.set_hexpand(true);
@@ -350,18 +354,20 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
 
     lines.append(&top);
     lines.append(&bottom);
-    root.append(&lines);
+    content.append(&lines);
+    // The whole row is a flat button: it lights under the pointer, presses,
+    // and stays lit (checked) while its chat is open.
+    let root = awra::ToggleButton::new();
+    awra::add_style_role(&root, "row-action");
+    root.set_child(Some(&content));
+    root.set_margin_start(6);
+    root.set_margin_end(6);
     let shown: Rc<RefCell<Option<Row>>> = Rc::default();
-    // A click opens the chat and a right click its menu. A gesture on the
-    // row takes its clicks from the list, so the row answers both itself;
-    // the keyboard still activates through the list.
+    // A click opens the chat, a right click its menu.
     let click = awra::GestureClick::new();
-    click.set_button(0);
+    click.set_button(3);
     let (weak, bound, anchor) = (driver.clone(), shown.clone(), root.clone());
-    click.connect_pressed(move |gesture, _, x, y| {
-        if gesture.current_button() != 3 {
-            return;
-        }
+    click.connect_pressed(move |_, _, x, y| {
         let id = bound.borrow().as_ref().map(|row| row.id.clone());
         let (Some(driver), Some(id)) = (weak.upgrade(), id) else {
             return;
@@ -371,20 +377,23 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
             awra::menu::popup_at(&anchor, x, y, entries);
         }
     });
+    root.add_controller(click);
     let (weak, bound) = (driver.clone(), shown.clone());
-    click.connect_released(move |gesture, _, _, _| {
-        if gesture.current_button() != 1 {
-            return;
-        }
-        let id = bound.borrow().as_ref().map(|row| row.id.clone());
-        if let (Some(driver), Some(id)) = (weak.upgrade(), id) {
+    root.connect_clicked(move |button| {
+        let id = bound
+            .borrow()
+            .as_ref()
+            .map(|row| (row.id.clone(), row.open));
+        if let (Some(driver), Some((id, open))) = (weak.upgrade(), id) {
+            // The open chat stays checked; the next turn shows the new one.
+            button.set_active(open);
             driver.act(Action::OpenChat(id));
         }
     });
-    root.add_controller(click);
     (
-        root,
+        root.clone(),
         RowWidgets {
+            button: root,
             avatar,
             title,
             stamp,
@@ -398,6 +407,7 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
 }
 
 fn bind_row(widgets: &RowWidgets, row: &Row) {
+    widgets.button.set_active(row.open);
     let mut shown = widgets.shown.borrow_mut();
     let picture_changed = shown
         .as_ref()

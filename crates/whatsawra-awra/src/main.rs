@@ -11,7 +11,9 @@
 
 use std::path::PathBuf;
 
-use whatsawra::{app, awra_ui, paths, settings};
+mod ui;
+
+use whatsawra::{app, paths, settings};
 
 fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -116,9 +118,9 @@ fn main() {
         )),
         _ => {}
     }
-    awra_ui::run(
+    ui::run(
         app,
-        awra_ui::Options {
+        ui::Options {
             shot,
             size,
             waker: Some(waker),

@@ -8393,7 +8393,6 @@ dependencies = [
  "apple-native-keyring-store",
  "arboard",
  "async-channel",
- "awra",
  "base64 0.23.1",
  "cbc",
  "clap",
@@ -8485,6 +8484,20 @@ dependencies = [
  "zbus-secret-service-keyring-store",
  "zeroize",
  "zip",
+]
+
+[[package]]
+name = "whatsawra-awra"
+version = "0.21.1"
+dependencies = [
+ "awra",
+ "egui",
+ "emojis",
+ "fastframe-log",
+ "image",
+ "log",
+ "qrcode",
+ "whatsawra",
 ]
 
 [[package]]

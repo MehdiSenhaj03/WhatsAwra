@@ -10,9 +10,9 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::{Driver, Op};
-use crate::app::App;
-use crate::i18n::{Locale, gettext};
-use crate::model::{Action, Chat, Content, Delivery, Message};
+use whatsawra::app::App;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::{Action, Chat, Content, Delivery, Message};
 
 /// One row of the message list.
 #[derive(Clone, Debug, PartialEq)]
@@ -96,6 +96,8 @@ struct RowWidgets {
 
 pub struct ConversationPane {
     pub root: awra::Stack,
+    /// The open chat's header, for the window's header.
+    pub header: awra::Box,
     avatar: awra::Avatar,
     title: awra::Label,
     subtitle: awra::Label,
@@ -104,6 +106,9 @@ pub struct ConversationPane {
     items: Rc<RefCell<Vec<Item>>>,
     typing: awra::TypingIndicator,
     composer: awra::Composer,
+    attachments: super::composer::Attachments,
+    attachments_given: bool,
+    recording: super::composer::Recording,
     composer_banner: Option<String>,
     /// The chat the view shows, to start each chat at its newest message.
     shown_chat: Option<String>,
@@ -126,13 +131,14 @@ impl ConversationPane {
 
         let chat = awra::Box::new(awra::Orientation::Vertical, 0);
 
-        // The header: who, their status, and the chat's actions.
+        // The header: who, their status, and the chat's actions. It sits in
+        // the window's own header, above the messages (the shell puts it there).
         let header = awra::Box::new(awra::Orientation::Horizontal, 12);
-        header.set_margin_top(10);
-        header.set_margin_bottom(10);
+        header.set_hexpand(true);
         header.set_margin_start(16);
-        header.set_margin_end(12);
-        let avatar = awra::Avatar::new(40, None);
+        header.set_margin_end(8);
+        let avatar = awra::Avatar::new(36, None);
+        avatar.set_valign(awra::Align::Center);
         header.append(&avatar);
         let names = awra::Box::new(awra::Orientation::Vertical, 0);
         names.set_hexpand(true);
@@ -174,8 +180,6 @@ impl ConversationPane {
             Action::OpenChatSearch
         });
         action_button("info-outline-symbolic", "Chat info", Action::OpenInfo);
-        chat.append(&header);
-        chat.append(&awra::Separator::new(awra::Orientation::Horizontal));
 
         // The messages.
         let items: Rc<RefCell<Vec<Item>>> = Rc::default();
@@ -199,6 +203,7 @@ impl ConversationPane {
             }
         });
         let view = awra::ConversationView::new(Some(store.clone()), Some(factory));
+        awra::add_style_role(&view, "entry-hover");
         view.set_vexpand(true);
         let weak = Rc::downgrade(driver);
         view.connect_edge_reached(move |_, edge| {
@@ -228,7 +233,7 @@ impl ConversationPane {
         composer.set_placeholder_text(Some(gettext(locale, "Type a message").as_ref()));
         composer.set_max_lines(8);
         let attach = awra::Button::from_icon_name("list-add-symbolic");
-        attach.set_appearance(awra::ButtonAppearance::Ghost);
+        attach.set_appearance(awra::ButtonAppearance::Toolbar);
         attach.set_tooltip_text(Some(gettext(locale, "Attach").as_ref()));
         let weak = Rc::downgrade(driver);
         attach.connect_clicked(move |_| {
@@ -238,7 +243,7 @@ impl ConversationPane {
         });
         composer.set_start_widget(Some(&attach));
         let emoji = awra::Button::from_icon_name("face-smile-symbolic");
-        emoji.set_appearance(awra::ButtonAppearance::Ghost);
+        emoji.set_appearance(awra::ButtonAppearance::Toolbar);
         emoji.set_tooltip_text(Some(gettext(locale, "Emoji").as_ref()));
         // The emoji picker, made on its first opening: it inserts at the
         // composer's cursor, and the composer's text reaches the app as typing.
@@ -251,7 +256,12 @@ impl ConversationPane {
                 .clone();
             popover.popup();
         });
-        composer.set_end_widget(Some(&emoji));
+        let recording = super::composer::Recording::build(driver, locale);
+        let ends = awra::Box::new(awra::Orientation::Horizontal, 0);
+        ends.append(&emoji);
+        ends.append(&recording.mic);
+        composer.set_end_widget(Some(&ends));
+        let attachments = super::composer::Attachments::new();
         let weak = Rc::downgrade(driver);
         composer.connect_text_notify(move |composer| {
             let text = composer.text();
@@ -303,10 +313,12 @@ impl ConversationPane {
             }
         });
         chat.append(&composer);
+        chat.append(&recording.bar);
         root.add_named(&chat, Some("chat"));
 
         Self {
             root,
+            header,
             avatar,
             title,
             subtitle,
@@ -316,6 +328,9 @@ impl ConversationPane {
             typing,
             composer,
             composer_banner: None,
+            attachments,
+            attachments_given: false,
+            recording,
             shown_chat: None,
             shown_avatar: None,
             asked: HashSet::new(),
@@ -323,7 +338,9 @@ impl ConversationPane {
     }
 
     pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
-        let Some(chat) = app.current_chat() else {
+        let chat = app.current_chat().filter(|_| app.chat_view());
+        self.header.set_visible(chat.is_some());
+        let Some(chat) = chat else {
             if self.root.visible_child_name().as_deref() != Some("empty") {
                 self.root.set_visible_child_name("empty");
             }
@@ -336,7 +353,7 @@ impl ConversationPane {
         let switched = self.shown_chat.as_deref() != Some(chat.id.as_str());
         self.sync_header(app, chat, switched);
         self.sync_messages(driver, app, chat, switched);
-        self.sync_composer(app, chat, switched);
+        self.sync_composer(driver, app, chat, switched);
         self.shown_chat = Some(chat.id.clone());
     }
 
@@ -355,12 +372,12 @@ impl ConversationPane {
             self.avatar.set_custom_image(texture.as_ref());
             self.shown_avatar = picture;
         }
-        let (subtitle, tone) = crate::present::chat_subtitle(app, chat);
+        let (subtitle, tone) = whatsawra::present::chat_subtitle(app, chat);
         self.subtitle.set_text(&subtitle);
         self.subtitle.set_visible(!subtitle.is_empty());
         self.subtitle.set_typography(match tone {
-            crate::present::Tone::Accent => awra::Typography::Label,
-            crate::present::Tone::Secondary => awra::Typography::Muted,
+            whatsawra::present::Tone::Accent => awra::Typography::Label,
+            whatsawra::present::Tone::Secondary => awra::Typography::Muted,
         });
         let typing = !app.typing_in(&chat.id).is_empty();
         self.typing.set_active(typing);
@@ -403,31 +420,29 @@ impl ConversationPane {
             self.view.scroll_to_end(false);
             return;
         }
-        let same = |a: &[Item], b: &[Item]| {
-            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.key() == y.key())
-        };
-        if same(&old, &items) {
-            for (position, (before, after)) in old.iter().zip(&items).enumerate() {
-                if before != after {
-                    self.view.delegate().rebind(position as u32);
-                }
-            }
-        } else if items.len() > old.len() && same(&old, &items[items.len() - old.len()..]) {
-            // Older messages arrived above.
-            let added = items.len() - old.len();
-            let objects: Vec<awra::Object> = items[..added].iter().map(object).collect();
-            self.store.splice(0, 0, &objects);
-        } else if items.len() > old.len() && same(&old, &items[..old.len()]) {
-            // Newer messages arrived below.
-            let objects: Vec<awra::Object> = items[old.len()..].iter().map(object).collect();
-            self.store.splice(old.len() as u32, 0, &objects);
-        } else {
-            let objects: Vec<awra::Object> = items.iter().map(object).collect();
-            self.store.splice(0, self.store.n_items(), &objects);
-        }
+        let list = self.view.delegate();
+        super::rows::update(&self.store, &old, &items, Item::key, |position| {
+            list.rebind(position)
+        });
     }
 
-    fn sync_composer(&mut self, app: &App, chat: &Chat, switched: bool) {
+    fn sync_composer(&mut self, driver: &Rc<Driver>, app: &App, chat: &Chat, switched: bool) {
+        let staged = self.attachments.sync(driver, app);
+        // The composer keeps a section's room while it has one: the strip
+        // is given only while something is staged.
+        if staged != self.attachments_given {
+            if staged {
+                self.composer.set_attachments(Some(&self.attachments.root));
+            } else {
+                self.composer.set_attachments(None::<&awra::Widget>);
+            }
+            self.attachments_given = staged;
+        }
+        self.composer.set_can_send(staged);
+        let recording = self
+            .recording
+            .sync(app, app.composer.trim().is_empty() && !staged);
+        self.composer.set_visible(!recording);
         if self.composer.text() != app.composer {
             self.composer.set_text(Some(&app.composer));
         }
@@ -479,12 +494,12 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
         .and_then(|divider| first_unread(messages, divider.count));
     let mine = app.our_ids();
     for (index, message) in messages.iter().enumerate() {
-        let key = crate::util::day_key(message.timestamp);
+        let key = whatsawra::util::day_key(message.timestamp);
         if key != day {
             day = key;
             items.push(Item::Day {
                 key: format!("day:{}", message.id),
-                label: crate::util::day_label(app.locale, message.timestamp),
+                label: whatsawra::util::day_label(app.locale, message.timestamp),
             });
         }
         if unread_from.as_deref() == Some(message.id.as_str()) {
@@ -505,7 +520,7 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             other.is_some_and(|other| {
                 other.sender == message.sender
                     && other.from_me == message.from_me
-                    && crate::util::day_key(other.timestamp) == key
+                    && whatsawra::util::day_key(other.timestamp) == key
                     && notice_of(app, other).is_none()
             })
         };
@@ -554,7 +569,7 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             markup,
             big,
             forwarded: message.forwarded,
-            stamp: crate::util::clock(message.timestamp),
+            stamp: whatsawra::util::clock(message.timestamp),
             status: message.from_me.then_some(message.status),
             edited: message.edited,
             reactions,
@@ -598,12 +613,63 @@ fn notice_of(app: &App, message: &Message) -> Option<String> {
 
 /// A bubble's text as markup, and whether it is emoji alone (drawn large).
 fn body_of(app: &App, message: &Message) -> (String, bool) {
+    // Read once per message and text: every turn reads every loaded message.
+    thread_local! {
+        static MARKUP: RefCell<std::collections::HashMap<String, (u64, String, bool)>> =
+            RefCell::default();
+    }
     let mentions = app.mention_list(message);
+    let key = {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let shown = match &message.content {
+            Content::Text { text, .. } | Content::Interactive { text, .. } => Some(text.as_str()),
+            Content::Image { caption, .. }
+            | Content::Video { caption, .. }
+            | Content::Document { caption, .. } => caption.as_deref(),
+            _ => None,
+        };
+        shown.hash(&mut hasher);
+        std::mem::discriminant(&message.content).hash(&mut hasher);
+        // What other content says may change (a poll, a call): read it again.
+        if shown.is_none() {
+            app.message_text(message).hash(&mut hasher);
+        }
+        for mention in &mentions {
+            mention.user.hash(&mut hasher);
+            mention.name.hash(&mut hasher);
+        }
+        hasher.finish()
+    };
+    if let Some((markup, big)) = MARKUP.with(|cache| {
+        cache
+            .borrow()
+            .get(&message.id)
+            .filter(|(hash, _, _)| *hash == key)
+            .map(|(_, markup, big)| (markup.clone(), *big))
+    }) {
+        return (markup, big);
+    }
+    let (markup, big) = read_body(app, message, &mentions);
+    MARKUP.with(|cache| {
+        cache
+            .borrow_mut()
+            .insert(message.id.clone(), (key, markup.clone(), big))
+    });
+    (markup, big)
+}
+
+fn read_body(
+    app: &App,
+    message: &Message,
+    mentions: &[whatsawra::markup::Mention],
+) -> (String, bool) {
+    let mentions = mentions.to_vec();
     match &message.content {
         Content::Text { text, .. } | Content::Interactive { text, .. } => {
             let big = is_emoji_only(text);
             (
-                crate::markup::pango(text, &mentions, "#3b9cff", "#8a8a8a"),
+                whatsawra::markup::pango(text, &mentions, "#3b9cff", "#8a8a8a"),
                 big,
             )
         }
@@ -614,7 +680,7 @@ fn body_of(app: &App, message: &Message) -> (String, bool) {
             caption
                 .as_deref()
                 .filter(|caption| !caption.is_empty())
-                .map(|caption| crate::markup::pango(caption, &mentions, "#3b9cff", "#8a8a8a"))
+                .map(|caption| whatsawra::markup::pango(caption, &mentions, "#3b9cff", "#8a8a8a"))
                 .unwrap_or_default(),
             false,
         ),
@@ -646,7 +712,7 @@ fn is_emoji_only(text: &str) -> bool {
 
 /// A sender's name colour, the same for them everywhere.
 fn sender_colour(id: &str) -> String {
-    let hue = crate::util::hue(id) / 360.0;
+    let hue = whatsawra::util::hue(id) / 360.0;
     let (r, g, b) = hsl(hue, 0.55, 0.55);
     format!("#{r:02x}{g:02x}{b:02x}")
 }
@@ -690,6 +756,7 @@ fn row_widgets(
     root.append(&notice);
 
     let line = awra::Box::new(awra::Orientation::Horizontal, 8);
+    awra::add_style_role(&line, "conversation-entry");
     line.set_margin_top(1);
     line.set_margin_bottom(1);
     let face = awra::Avatar::new(28, None);

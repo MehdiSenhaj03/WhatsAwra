@@ -10,6 +10,12 @@ repository = "https://github.com/MehdiSenhaj03/WhatsAwra"
 keywords = ["whatsapp", "chat", "egui", "messaging"]
 categories = ["gui"]
 
+# The Awra frontend (crates/whatsawra-awra) is a crate of its own over this
+# library, so a change to its views rebuilds a few thousand lines, not the
+# whole client.
+[workspace]
+members = [".", "crates/whatsawra-awra"]
+
 [lib]
 name = "whatsawra"
 path = "src/lib.rs"
@@ -17,14 +23,6 @@ path = "src/lib.rs"
 [[bin]]
 name = "whatsawra"
 path = "src/main.rs"
-
-# The Awra frontend: the same core (accounts, backend, archive) drawn with
-# Awra's frosted-glass components instead of egui. The port lands screen by
-# screen until it replaces the egui window.
-[[bin]]
-name = "whatsawra-awra"
-path = "src/bin/whatsawra-awra.rs"
-required-features = ["awra-ui"]
 
 [dependencies]
 anyhow = "1"
@@ -170,9 +168,6 @@ webp-animation = "0.10"
 # Encodes stickers made from pictures as still lossy WebP. Already included
 # through webp-animation, whose animation encoder always writes an animation.
 libwebp-sys2 = { version = "0.2", features = ["1_2"] }
-# Awra 2, the frosted-glass UI framework the Awra frontend is drawn with. A
-# sibling checkout while the port and the components it needs land together.
-awra = { path = "../Awra/bindings/rust/awra", optional = true }
 # Shared foundation of Carmine's egui apps (github.com/crmne/fastframe). Every
 # crate comes from the same revision.
 # Bundled gettext catalogs: lookups and system language detection.
@@ -342,8 +337,6 @@ harness = false
 [features]
 # Sample data, layout tests, and screenshots. Not used in release builds.
 demo = []
-# The Awra frontend (`whatsawra-awra`).
-awra-ui = ["dep:awra"]
 
 [profile.release]
 lto = "thin"

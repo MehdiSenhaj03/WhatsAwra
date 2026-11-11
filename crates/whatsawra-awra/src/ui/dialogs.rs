@@ -6,9 +6,9 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use super::Driver;
-use crate::app::App;
-use crate::i18n::gettext;
-use crate::model::{Action, Dialog};
+use whatsawra::app::App;
+use whatsawra::i18n::gettext;
+use whatsawra::model::{Action, Dialog};
 
 pub struct Dialogs {
     shown: Option<(Dialog, awra::Dialog)>,
@@ -50,7 +50,7 @@ impl Dialogs {
         let Some(dialog) = app.dialog.clone() else {
             return;
         };
-        let shown = if let Some(confirmation) = crate::confirm::of(app, &dialog) {
+        let shown = if let Some(confirmation) = whatsawra::confirm::of(app, &dialog) {
             confirmation_dialog(driver, app, window, confirmation)
         } else if let Some(mut chooser) = super::chooser::Chooser::of(driver, app, window, &dialog)
         {
@@ -90,7 +90,7 @@ fn confirmation_dialog(
     driver: &Rc<Driver>,
     app: &App,
     window: &awra::Window,
-    confirmation: crate::confirm::Confirmation,
+    confirmation: whatsawra::confirm::Confirmation,
 ) -> awra::Dialog {
     let dialog = awra::Dialog::new(Some(window));
     dialog.set_title(Some(confirmation.heading.as_str()));

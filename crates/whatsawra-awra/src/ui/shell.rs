@@ -10,14 +10,23 @@ use super::Driver;
 use super::chat_list::ChatList;
 use super::conversation::ConversationPane;
 use super::login::Login;
-use crate::app::App;
-use crate::i18n::gettext;
-use crate::model::{Action, Page};
+use whatsawra::app::App;
+use whatsawra::i18n::gettext;
+use whatsawra::model::{Action, Page};
+
+/// The room between the rail's places, the rail's own between its entries.
+const RAIL_GAP: i32 = 8;
+/// The rail's width and the list's, which the window's header follows.
+const RAIL_WIDTH: i32 = 72;
+const LIST_WIDTH: i32 = 340;
+/// The header's own room before its first widget.
+const HEADER_INSET: i32 = 14;
+const HEADER_START_WIDTH: i32 = RAIL_WIDTH + LIST_WIDTH - HEADER_INSET;
 
 pub struct Shell {
     pub window: awra::Window,
     /// The language the views were made in.
-    pub locale: crate::i18n::Locale,
+    pub locale: whatsawra::i18n::Locale,
     toasts: awra::ToastOverlay,
     pages: awra::Stack,
     login: Login,
@@ -38,7 +47,7 @@ pub struct Shell {
     info_scroll: awra::ScrolledWindow,
     info_open: bool,
     /// The theme last given to Awra.
-    theme: Option<crate::settings::ThemeChoice>,
+    theme: Option<whatsawra::settings::ThemeChoice>,
     dialogs: super::dialogs::Dialogs,
     /// Toasts already shown, by their place in `App::toasts` and text.
     shown_toasts: Vec<String>,
@@ -57,7 +66,7 @@ struct Rail {
 }
 
 impl Rail {
-    fn build(driver: &Rc<Driver>, locale: crate::i18n::Locale) -> Self {
+    fn build(driver: &Rc<Driver>, locale: whatsawra::i18n::Locale) -> Self {
         let rail = awra::Rail::new();
         let item = |label: &'static str, icon: &str| {
             let item = awra::RailItem::new(Some(gettext(locale, label).as_ref()));
@@ -72,15 +81,17 @@ impl Rail {
         let account = awra::RailItem::new(Some(gettext(locale, "Accounts").as_ref()));
         let account_avatar = awra::Avatar::new(32, None);
         account.set_child(Some(&account_avatar));
-        let header = awra::Box::new(awra::Orientation::Vertical, 4);
+        let header = awra::Box::new(awra::Orientation::Vertical, RAIL_GAP);
         header.append(&chats);
         header.append(&calls);
+        header.set_margin_top(RAIL_GAP);
         rail.set_header(Some(&header));
         rail.append(&starred);
         rail.append(&archived);
-        let footer = awra::Box::new(awra::Orientation::Vertical, 4);
+        let footer = awra::Box::new(awra::Orientation::Vertical, RAIL_GAP);
         footer.append(&settings);
         footer.append(&account);
+        footer.set_margin_bottom(RAIL_GAP);
         rail.set_footer(Some(&footer));
 
         let weak = Rc::downgrade(driver);
@@ -146,13 +157,29 @@ impl Rail {
 impl Shell {
     pub fn build(driver: &Rc<Driver>, window: awra::Window) -> Self {
         let locale = driver.read(|app| app.locale);
-        let header = awra::Header::new();
-        header.set_title(Some("WhatsAwra"));
-        window.set_titlebar(Some(&header));
-
         let rail = Rail::build(driver, locale);
         let chats = ChatList::build(driver, locale);
         let conversation = ConversationPane::build(driver, locale);
+
+        // The window's header carries no name of its own: over the rail and
+        // the list, the list's heading; over the chat, the chat's header, up
+        // to the window's buttons. It is the top of the panes below it.
+        let header = awra::Header::new();
+        header.set_expand_center(true);
+        header.set_compact(true);
+        let start = awra::Box::new(awra::Orientation::Horizontal, 0);
+        start.set_size_request(HEADER_START_WIDTH, -1);
+        let rail_room = awra::Box::new(awra::Orientation::Horizontal, 0);
+        rail_room.set_size_request(RAIL_WIDTH - HEADER_INSET, -1);
+        start.append(&rail_room);
+        chats.heading.set_hexpand(true);
+        chats.heading.set_valign(awra::Align::Center);
+        chats.heading.set_margin_start(16);
+        chats.heading.set_margin_end(8);
+        start.append(&chats.heading);
+        header.set_start_widget(Some(&start));
+        header.set_center_widget(Some(&conversation.header));
+        window.set_titlebar(Some(&header));
         let login = Login::build(driver, locale);
 
         let split = awra::SplitView::new();
@@ -161,7 +188,7 @@ impl Shell {
         lists.add_named(&chats.root, Some("chats"));
         lists.add_named(&calls.root, Some("calls"));
         split.set_sidebar(Some(&lists));
-        split.set_sidebar_width(340);
+        split.set_sidebar_width(LIST_WIDTH);
         split.set_content(Some(&conversation.root));
         let info = super::info::InfoPane::build(driver, locale);
         let info_scroll = awra::ScrolledWindow::new();
@@ -266,8 +293,9 @@ impl Shell {
                 self.call_banner
                     .set_title(Some(app.chat_title_of(&call.chat).as_str()));
                 self.call_banner
-                    .set_description(Some(crate::ui::call::status(app.locale, call).as_str()));
+                    .set_description(Some(whatsawra::ui::call::status(app.locale, call).as_str()));
             }
+            self.chats.sync_heading(app);
             let place = match app.page {
                 Page::Settings => "settings",
                 _ => "chats",
@@ -311,7 +339,7 @@ impl Shell {
     /// Awra's appearance follows the theme chosen in Settings; Messages,
     /// a macOS look, follows the system here.
     fn sync_theme(&mut self, app: &App) {
-        use crate::settings::ThemeChoice;
+        use whatsawra::settings::ThemeChoice;
         if self.theme == Some(app.settings.theme) {
             return;
         }
@@ -349,7 +377,7 @@ impl Shell {
             }
             let weak = Rc::downgrade(driver);
             let timeout = match app.toasts[index].kind {
-                crate::model::ToastKind::Info => 4000,
+                whatsawra::model::ToastKind::Info => 4000,
                 _ => 0,
             };
             let dismiss = gettext(app.locale, "Dismiss");

@@ -7,10 +7,10 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::Driver;
-use crate::app::App;
-use crate::app_lock::Forgetting;
-use crate::i18n::{Locale, gettext};
-use crate::model::Action;
+use whatsawra::app::App;
+use whatsawra::app_lock::Forgetting;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::Action;
 
 pub struct LockScreen {
     pub root: awra::Box,

@@ -5,10 +5,10 @@ use std::rc::Rc;
 use awra::prelude::*;
 
 use super::Driver;
-use crate::app::App;
-use crate::backend::LinkStatus;
-use crate::i18n::{Locale, gettext};
-use crate::model::Action;
+use whatsawra::app::App;
+use whatsawra::backend::LinkStatus;
+use whatsawra::i18n::{Locale, gettext};
+use whatsawra::model::Action;
 
 pub struct Login {
     pub root: awra::Box,

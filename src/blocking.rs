@@ -76,7 +76,7 @@ impl Blocklist {
 }
 
 /// Only a person, addressed by a phone number or privacy id, can be blocked.
-pub(crate) fn eligible(chat: &str, me: Option<&str>, me_lid: Option<&str>) -> bool {
+pub fn eligible(chat: &str, me: Option<&str>, me_lid: Option<&str>) -> bool {
     (chat.ends_with("@s.whatsapp.net") || chat.ends_with("@lid"))
         && Some(chat) != me
         && Some(chat) != me_lid

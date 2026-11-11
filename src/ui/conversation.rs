@@ -7739,12 +7739,12 @@ fn menu_first_item_id(chat: &str, message: &str) -> egui::Id {
 
 /// Whether the message menu offers Reply. A call in the chat is a record,
 /// with its own menu and no replies.
-pub(crate) fn can_reply(content: &Content) -> bool {
+pub fn can_reply(content: &Content) -> bool {
     !matches!(content, Content::Revoked | Content::Call { .. })
 }
 
 /// The message menu's Forward: the forward dialog for this one message.
-pub(crate) fn forward_action(chat: &str, message: &str) -> Action {
+pub fn forward_action(chat: &str, message: &str) -> Action {
     Action::ShowDialog(Dialog::Forward {
         chat: chat.to_owned(),
         messages: vec![message.to_owned()],
@@ -7752,7 +7752,7 @@ pub(crate) fn forward_action(chat: &str, message: &str) -> Action {
 }
 
 /// The message menu's "Delete for me": its confirmation, never the deletion.
-pub(crate) fn delete_for_me_action(chat: &str, message: &str) -> Action {
+pub fn delete_for_me_action(chat: &str, message: &str) -> Action {
     Action::ShowDialog(Dialog::ConfirmDeleteMessage {
         chat: chat.to_owned(),
         message: message.to_owned(),
@@ -7762,7 +7762,7 @@ pub(crate) fn delete_for_me_action(chat: &str, message: &str) -> Action {
 
 /// The message menu's "Delete for everyone": its confirmation, never the
 /// deletion.
-pub(crate) fn delete_for_everyone_action(chat: &str, message: &str) -> Action {
+pub fn delete_for_everyone_action(chat: &str, message: &str) -> Action {
     Action::ShowDialog(Dialog::ConfirmDeleteMessage {
         chat: chat.to_owned(),
         message: message.to_owned(),
@@ -7828,7 +7828,7 @@ pub(crate) fn revoke_refusal_said(locale: crate::i18n::Locale, blocker: RevokeBl
 
 /// What the menu's "Copy text" copies, before mentions are resolved: the
 /// text or caption, a location's coordinates or a contact's card.
-pub(crate) fn copyable_text(content: &Content) -> Option<String> {
+pub fn copyable_text(content: &Content) -> Option<String> {
     match content {
         Content::Text { text, .. } | Content::Interactive { text, .. } => Some(text.clone()),
         Content::Image { caption, .. }

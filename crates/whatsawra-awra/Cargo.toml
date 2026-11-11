@@ -1,0 +1,29 @@
+[package]
+name = "whatsawra-awra"
+version = "0.21.1"
+edition = "2024"
+rust-version = "1.98"
+license = "GPL-3.0-or-later"
+description = "WhatsAwra drawn with Awra, the frosted-glass UI framework"
+publish = false
+
+[[bin]]
+name = "whatsawra-awra"
+path = "src/main.rs"
+
+[dependencies]
+whatsawra = { path = "../.." }
+# Awra 2, the frosted-glass UI framework this window is drawn with. A sibling
+# checkout while the port and the components it needs land together.
+awra = { path = "../../../Awra/bindings/rust/awra" }
+# The app's own crates, at the versions the library already uses.
+egui = "0.36.2"
+log = "0.4"
+fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.16.1" }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+emojis = "0.9"
+qrcode = { version = "0.14", default-features = false }
+
+[features]
+# The offline sample (`--demo`) and its shots.
+demo = ["whatsawra/demo"]

@@ -338,7 +338,7 @@ pub(crate) struct Sweep {
 }
 
 /// Whether a message can join a selection, matching `Worker::forward_job`.
-pub(crate) fn can_select(content: &Content) -> bool {
+pub fn can_select(content: &Content) -> bool {
     !matches!(
         content,
         Content::Revoked
@@ -6700,7 +6700,7 @@ impl App {
     }
 
     /// Snapshots selected mentions before the view queues an attachment send.
-    pub(crate) fn composer_mentions(&self) -> Vec<ComposerMention> {
+    pub fn composer_mentions(&self) -> Vec<ComposerMention> {
         self.composer_mentions.clone()
     }
 
@@ -12370,7 +12370,6 @@ fn notification_eligible(chat: &Chat, now: i64, message_at: i64) -> bool {
 }
 
 mod calls;
-#[cfg(feature = "awra-ui")]
 mod frontend;
 pub use calls::CallPerson;
 

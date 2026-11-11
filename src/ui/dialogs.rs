@@ -562,7 +562,7 @@ fn new_chat(app: &mut App, ui: &mut egui::Ui) {
 /// The people New chat and New call offer, by name: the contacts and the
 /// one-to-one chats, without ourselves or a locked chat, matching `needle`
 /// (a `search_key`) by name or number.
-pub(crate) fn contact_choices(app: &App, needle: &str) -> Vec<crate::model::Contact> {
+pub fn contact_choices(app: &App, needle: &str) -> Vec<crate::model::Contact> {
     let mut contacts = app.contacts.clone();
     for chat in &app.chats {
         if chat.kind == crate::model::ChatKind::Direct {
@@ -903,7 +903,7 @@ fn forward_footer(app: &mut App, ui: &mut egui::Ui) {
 /// Uses the model's send permissions to reject unavailable forwarding
 /// destinations. Locked chats stay out of the picker, which would otherwise
 /// list them outside the locked folder.
-pub(crate) fn forwardable(chat: &crate::model::Chat) -> bool {
+pub fn forwardable(chat: &crate::model::Chat) -> bool {
     chat.can_send() && !chat.locked
 }
 
