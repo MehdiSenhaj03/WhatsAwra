@@ -70,6 +70,11 @@ pub struct Driver {
     demo: Cell<bool>,
     /// When the last turn ended.
     turn_started: Cell<Instant>,
+    /// When the turn now queued was asked for: one that starts long after
+    /// was kept waiting by the loop (a frame, a layout), which the log says.
+    asked: Cell<Option<Instant>>,
+    /// What the last ten seconds cost, for the log of a development build.
+    stats: RefCell<Stats>,
 }
 
 thread_local! {
@@ -110,6 +115,8 @@ impl Driver {
             syncing: Cell::new(false),
             demo: Cell::new(false),
             turn_started: Cell::new(Instant::now()),
+            asked: Cell::new(None),
+            stats: RefCell::default(),
         });
         DRIVER.with(|slot| *slot.borrow_mut() = Rc::downgrade(&driver));
         // The app's waker and its timed requests reach Awra's loop from any
@@ -118,11 +125,23 @@ impl Driver {
             let delay = info.delay;
             awra::glib::invoke(move || {
                 if let Some(driver) = DRIVER.with(|slot| slot.borrow().upgrade()) {
-                    driver.wake_in(delay);
+                    driver.wake_for_app(delay);
                 }
             });
         });
         driver
+    }
+
+    /// A turn the app asked for through its egui context. "At once" means
+    /// the next frame there, and code that waits on something asks again
+    /// from every frame: taken literally here, where a turn is no frame, it
+    /// took hundreds of turns a second. Such a turn starts a frame's time
+    /// after the last one at the earliest; what the reader does (`push`)
+    /// still gets its turn at once.
+    fn wake_for_app(&self, delay: Duration) {
+        const FRAME: Duration = Duration::from_millis(8);
+        let earliest = FRAME.saturating_sub(self.turn_started.get().elapsed());
+        self.wake_in(delay.max(earliest));
     }
 
     /// Queues `op` and asks for a turn. Ignored while the views write their
@@ -164,6 +183,7 @@ impl Driver {
         if self.queued.replace(true) {
             return;
         }
+        self.asked.set(Some(Instant::now()));
         awra::glib::idle_add_local_once(|| {
             if let Some(driver) = DRIVER.with(|slot| slot.borrow().upgrade()) {
                 driver.queued.set(false);
@@ -231,6 +251,20 @@ impl Driver {
     /// views read the result.
     fn turn(self: &Rc<Self>) {
         TURNS.with(|turns| turns.set(turns.get() + 1));
+        let began = Instant::now();
+        // What the reader did waits for this turn: one that starts late is a
+        // hitch, whatever the turn itself then costs.
+        if let Some(waited) = self.asked.take().map(|asked| asked.elapsed())
+            && waited > Duration::from_millis(50)
+        {
+            let late = format!("a turn waited {} ms for the loop", waited.as_millis());
+            if profile::on() {
+                eprintln!("{late}");
+            }
+            timing(&late);
+            let mut stats = self.stats.borrow_mut();
+            stats.waited = stats.waited.max(waited);
+        }
         let focused = self.focused();
         {
             let mut app = self.app.borrow_mut();
@@ -253,6 +287,8 @@ impl Driver {
             });
             // Nothing paints the context, so its texture uploads go nowhere.
             output.textures_delta.clear();
+            // A picture that changed under its file name is read again.
+            pictures::forget(&app.take_stale_pictures());
             // The app brings an open window forward (a second launch, a
             // notification) by asking egui to focus it.
             let raise = output.viewport_output.values().any(|viewport| {
@@ -279,14 +315,26 @@ impl Driver {
         let synced = Instant::now();
         profile::span("views", || self.sync());
         // A turn that takes a frame or more is what makes the window lag.
-        let took = synced.elapsed();
+        let views = synced.elapsed();
+        let took = began.elapsed();
         let whole = self.turn_started.replace(Instant::now()).elapsed();
-        if took > Duration::from_millis(12) {
-            log::debug!(
-                "slow turn: views {} ms, {} ms since the last turn",
+        {
+            let mut stats = self.stats.borrow_mut();
+            stats.turns += 1;
+            stats.spent += took;
+            stats.longest = stats.longest.max(took);
+        }
+        if took > Duration::from_millis(16) {
+            let slow = format!(
+                "slow turn: {} ms (views {} ms), {} ms since the last turn",
                 took.as_millis(),
+                views.as_millis(),
                 whole.as_millis()
             );
+            if profile::on() {
+                eprintln!("{slow}");
+            }
+            timing(&slow);
         }
     }
 
@@ -332,7 +380,12 @@ pub fn run(app: App, options: Options) {
     let window = match &options.shot {
         Some(_) => {
             let (width, height) = options.size.unwrap_or((1280, 820));
-            awra::Window::offscreen("WhatsAwra", width, height, 1.0)
+            // WHATSAWRA_SHOT_SCALE=2 shoots at twice the density, to look closely.
+            let scale = std::env::var("WHATSAWRA_SHOT_SCALE")
+                .ok()
+                .and_then(|scale| scale.parse::<f64>().ok())
+                .unwrap_or(1.0);
+            awra::Window::offscreen("WhatsAwra", width, height, scale)
         }
         None => {
             let window = awra::Window::new(&application);
@@ -354,9 +407,13 @@ pub fn run(app: App, options: Options) {
     match options.shot {
         Some(path) => {
             // Let a few turns settle (pictures, the first page of messages).
+            // An offscreen window lays its rows out only when it is drawn,
+            // and rows ask for their pictures as they are laid out: drawing
+            // while settling is what a window on screen does.
             let start = Instant::now();
             while start.elapsed() < Duration::from_millis(1200) {
                 awra::pump();
+                window.render_offscreen(false);
                 std::thread::sleep(Duration::from_millis(15));
             }
             driver.turn();
@@ -379,23 +436,39 @@ pub fn run(app: App, options: Options) {
                 other.render_offscreen(true);
                 other.snapshot_png(&format!("{}-win{index}.png", stem.display()));
             }
-            // WHATSAWRA_SWITCH=<n>: opens the n-th chat and shoots the frames that
-            // follow, every 16 ms, to see how a switch looks while it happens.
-            if let Some(index) = std::env::var("WHATSAWRA_SWITCH")
-                .ok()
-                .and_then(|n| n.parse::<usize>().ok())
-            {
-                let chat =
-                    driver.read(|app| app.visible_chats().get(index).map(|chat| chat.id.clone()));
-                if let Some(chat) = chat {
-                    driver.act(whatsawra::model::Action::OpenChat(chat));
-                }
+            // WHATSAWRA_SWITCH=<n>[,<n>…]: opens those chats one after another,
+            // two frames apart, as a reader in a hurry does, and shoots every
+            // frame, 16 ms apart, with ten more after the last: how a switch
+            // looks while it happens.
+            if let Ok(list) = std::env::var("WHATSAWRA_SWITCH") {
+                let chats: Vec<usize> = list
+                    .split(',')
+                    .filter_map(|n| n.trim().parse().ok())
+                    .collect();
                 let stem = path.with_extension("");
-                for frame in 0..12 {
-                    awra::pump();
-                    std::thread::sleep(Duration::from_millis(16));
-                    window.render_offscreen(true);
-                    window.snapshot_png(&format!("{}-f{frame:02}.png", stem.display()));
+                let mut frame = 0;
+                for (step, index) in chats.iter().enumerate() {
+                    let chat = driver
+                        .read(|app| app.visible_chats().get(*index).map(|chat| chat.id.clone()));
+                    if let Some(chat) = chat {
+                        driver.act(whatsawra::model::Action::OpenChat(chat));
+                    }
+                    let frames = if step + 1 == chats.len() { 10 } else { 2 };
+                    for _ in 0..frames {
+                        let started = Instant::now();
+                        awra::pump();
+                        let pumped = started.elapsed();
+                        std::thread::sleep(Duration::from_millis(16));
+                        let started = Instant::now();
+                        window.render_offscreen(true);
+                        eprintln!(
+                            "frame {frame} (chat {index}): loop {:.1} ms, drawn in {:.1} ms",
+                            pumped.as_secs_f64() * 1000.0,
+                            started.elapsed().as_secs_f64() * 1000.0
+                        );
+                        window.snapshot_png(&format!("{}-f{frame:02}.png", stem.display()));
+                        frame += 1;
+                    }
                 }
             }
             let drawn = window.render_offscreen(true);
@@ -425,15 +498,24 @@ pub fn run(app: App, options: Options) {
                 awra::quit();
                 awra::glib::Propagation::Proceed
             });
+            watch_timing(&driver);
             if std::env::var_os("WHATSAWRA_BENCH").is_some() {
                 bench(&driver);
             }
             if std::env::var_os("WHATSAWRA_TURNS").is_some() {
-                awra::glib::timeout_add_local(Duration::from_secs(1), || {
+                // Frames drawn and pixels repainted too: a turn that changes
+                // nothing must draw nothing.
+                let drawn = Cell::new(window.stats());
+                let window = window.clone();
+                awra::glib::timeout_add_local(Duration::from_secs(1), move || {
                     let turns = TURNS.with(|turns| turns.replace(0));
+                    let now = window.stats();
+                    let (frames, pixels) = drawn.replace(now);
                     eprintln!(
-                        "turns in the last second: {turns}
+                        "turns in the last second: {turns}, frames {}, pixels {}
 {}",
+                        now.0 - frames,
+                        now.1 - pixels,
                         profile::report()
                     );
                     awra::glib::ControlFlow::Continue
@@ -454,6 +536,15 @@ pub(crate) fn wake() {
     }
 }
 
+/// Asks for a turn after `delay` (a clock that moves on its own: a call's
+/// time, a recording's). One request stands for all those made before it is
+/// due, so a view may ask at every turn without the turns multiplying.
+pub(crate) fn wake_after(delay: Duration) {
+    if let Some(driver) = DRIVER.with(|slot| slot.borrow().upgrade()) {
+        driver.wake_in(delay);
+    }
+}
+
 /// WHATSAWRA_BENCH: plays the reader for a few seconds (opening chats one
 /// after another, typing a line), then prints what each step's turn cost and
 /// quits. With `--demo --stress` it measures the window on a busy account.
@@ -464,7 +555,7 @@ fn bench(driver: &Rc<Driver>) {
     let chats: Vec<String> = driver.read(|app| {
         app.visible_chats()
             .iter()
-            .take(12)
+            .take(8)
             .map(|chat| chat.id.clone())
             .collect()
     });
@@ -477,7 +568,7 @@ fn bench(driver: &Rc<Driver>) {
             }),
         ));
     }
-    for length in 1..=30 {
+    for length in 1..=8 {
         steps.push((
             "type a letter",
             Box::new(move |driver: &Rc<Driver>| {
@@ -493,17 +584,38 @@ fn bench(driver: &Rc<Driver>) {
             }),
         ));
     }
+    // How long the loop was held: a timer due every 2 ms that comes late was
+    // kept waiting by a turn, a layout or a frame. The longest wait of a step
+    // is what the reader feels as a hitch.
+    let held: Rc<Cell<(Duration, Duration)>> = Rc::default();
+    let last = Cell::new(Instant::now());
+    let meter = held.clone();
+    awra::glib::timeout_add_local(Duration::from_millis(2), move || {
+        let gap = last.replace(Instant::now()).elapsed();
+        let (longest, total) = meter.get();
+        let over = gap.saturating_sub(Duration::from_millis(4));
+        meter.set((longest.max(gap), total + over));
+        awra::glib::ControlFlow::Continue
+    });
     let weak = Rc::downgrade(driver);
     let at = Cell::new(0usize);
     let _ = profile::report();
-    awra::glib::timeout_add_local(Duration::from_millis(120), move || {
+    awra::glib::timeout_add_local(Duration::from_millis(400), move || {
         let Some(driver) = weak.upgrade() else {
             return awra::glib::ControlFlow::Break;
         };
         let index = at.get();
         if index > 0 {
             let (name, _) = &steps[index - 1];
-            eprintln!("after {name}:\n{}", profile::report());
+            let (longest, total) = held.take();
+            eprintln!(
+                "after {name}: loop held {:.1} ms at most, {:.1} ms in all\n{}",
+                longest.as_secs_f64() * 1000.0,
+                total.as_secs_f64() * 1000.0,
+                profile::report()
+            );
+        } else {
+            held.take();
         }
         if let Some((_, step)) = steps.get(index) {
             step(&driver);
@@ -513,5 +625,101 @@ fn bench(driver: &Rc<Driver>) {
             awra::quit();
             awra::glib::ControlFlow::Break
         }
+    });
+}
+
+/// What a search field and the app last agreed its text was. The field
+/// tells the app what was typed only after a pause; a turn taken meanwhile
+/// (a message arriving, a picture decoded) must not write the app's older
+/// text back over the letters just typed.
+#[derive(Clone, Default)]
+pub(crate) struct Typed(Rc<RefCell<String>>);
+
+impl Typed {
+    /// The field told the app `text`.
+    pub fn note(&self, text: &str) {
+        *self.0.borrow_mut() = text.to_owned();
+    }
+
+    /// Writes the app's `text` into `entry` when the app changed it on its
+    /// own (cleared it, restored it), not when the field is merely ahead.
+    pub fn follow(&self, entry: &awra::SearchEntry, text: &str) {
+        if *self.0.borrow() == text {
+            return;
+        }
+        self.note(text);
+        if entry.text() != text {
+            entry.set_text(text);
+        }
+    }
+}
+
+/// What the window cost over a stretch of time.
+#[derive(Default)]
+struct Stats {
+    turns: u32,
+    /// The time spent in turns, and the longest of them.
+    spent: Duration,
+    longest: Duration,
+    /// The longest a turn waited for the loop after it was asked for.
+    waited: Duration,
+    /// The longest the loop kept a timer waiting (a layout, a frame).
+    held: Duration,
+}
+
+/// A line about the window's timing: never anything of a chat. A
+/// development build (the one installed to try a change) writes it to the
+/// log file, which keeps warnings only; a release keeps it for a debug log.
+fn timing(line: &str) {
+    if cfg!(debug_assertions) {
+        log::warn!("ui timing: {line}");
+    } else {
+        log::debug!("ui timing: {line}");
+    }
+}
+
+/// In a development build, a heartbeat that measures how long the loop
+/// keeps it waiting, and a line every ten seconds saying what the window
+/// cost meanwhile, when it cost anything worth saying.
+fn watch_timing(driver: &Rc<Driver>) {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    const BEAT: Duration = Duration::from_millis(100);
+    let weak = Rc::downgrade(driver);
+    let last = Cell::new(Instant::now());
+    let beats = Cell::new(0u32);
+    awra::glib::timeout_add_local(BEAT, move || {
+        let Some(driver) = weak.upgrade() else {
+            return awra::glib::ControlFlow::Break;
+        };
+        let late = last.replace(Instant::now()).elapsed().saturating_sub(BEAT);
+        if late > Duration::from_millis(100) {
+            timing(&format!("the loop was held {} ms", late.as_millis()));
+        }
+        let mut stats = driver.stats.borrow_mut();
+        stats.held = stats.held.max(late);
+        beats.set(beats.get() + 1);
+        if beats.get() >= 100 {
+            beats.set(0);
+            let stats = std::mem::take(&mut *stats);
+            let busy = stats.turns > 300
+                || stats.spent > Duration::from_millis(500)
+                || stats.longest > Duration::from_millis(30)
+                || stats.waited > Duration::from_millis(50)
+                || stats.held > Duration::from_millis(50);
+            if busy {
+                timing(&format!(
+                    "10 s: {} turns taking {} ms in all, the longest {} ms; \
+                     a turn waited up to {} ms, the loop was held up to {} ms",
+                    stats.turns,
+                    stats.spent.as_millis(),
+                    stats.longest.as_millis(),
+                    stats.waited.as_millis(),
+                    stats.held.as_millis()
+                ));
+            }
+        }
+        awra::glib::ControlFlow::Continue
     });
 }

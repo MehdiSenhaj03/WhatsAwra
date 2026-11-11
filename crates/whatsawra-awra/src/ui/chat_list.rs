@@ -57,6 +57,7 @@ pub struct ChatList {
     pub heading: awra::Box,
     new_chat: awra::Button,
     search: awra::SearchEntry,
+    typed: super::Typed,
     chips: Vec<(ChatFilter, awra::Chip)>,
     store: awra::ListStore,
     list: awra::ListView,
@@ -164,8 +165,11 @@ impl ChatList {
         root.append(&empty);
 
         let weak = Rc::downgrade(driver);
+        let typed = super::Typed::default();
+        let noted = typed.clone();
         search.connect_search_changed(move |entry| {
             let text = entry.text();
+            noted.note(&text);
             if let Some(driver) = weak.upgrade() {
                 driver.act(Action::Search(text));
             }
@@ -183,6 +187,7 @@ impl ChatList {
             heading,
             new_chat,
             search,
+            typed,
             chips,
             store,
             list,
@@ -210,9 +215,7 @@ impl ChatList {
     }
 
     pub fn sync(&mut self, _driver: &Rc<Driver>, app: &App) {
-        if self.search.text() != app.search {
-            self.search.set_text(&app.search);
-        }
+        self.typed.follow(&self.search, &app.search);
         for (filter, chip) in &self.chips {
             chip.set_active(app.chat_filter == *filter && app.label_filter.is_none());
         }

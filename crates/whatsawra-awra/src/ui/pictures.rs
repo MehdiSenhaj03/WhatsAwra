@@ -17,6 +17,8 @@ pub const TILE_SIDE: u32 = 192;
 /// The longest side a profile picture is kept at: the largest avatar (the
 /// info panel's) on a high-density screen.
 pub const AVATAR_SIDE: u32 = 256;
+/// How many avatars are remembered as showing a picture.
+const SHOWING_MOST: usize = 512;
 
 #[derive(Default)]
 struct Cache {
@@ -32,6 +34,9 @@ thread_local! {
     static CACHE: RefCell<Cache> = RefCell::new(Cache::default());
     /// Avatars whose picture is being decoded.
     static WAITING: RefCell<Vec<(PathBuf, awra::Avatar)>> = const { RefCell::new(Vec::new()) };
+    /// The avatars showing a picture, to give them the new one when its file
+    /// changes; the oldest are let go past [`SHOWING_MOST`].
+    static SHOWING: RefCell<Vec<(PathBuf, awra::Avatar)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Puts the profile picture at `path` in `avatar` (its initials without
@@ -44,6 +49,16 @@ pub fn avatar(avatar: &awra::Avatar, path: Option<&Path>) {
         return;
     }
     avatar.set_rust_data("picture", wanted.clone());
+    SHOWING.with(|showing| {
+        let mut showing = showing.borrow_mut();
+        showing.retain(|(_, shown)| shown != avatar);
+        if let Some(path) = &wanted {
+            if showing.len() >= SHOWING_MOST {
+                showing.remove(0);
+            }
+            showing.push((path.clone(), avatar.clone()));
+        }
+    });
     let Some(path) = wanted else {
         avatar.set_custom_image(None::<&awra::Texture>);
         return;
@@ -57,6 +72,43 @@ pub fn avatar(avatar: &awra::Avatar, path: Option<&Path>) {
         return;
     }
     WAITING.with(|waiting| waiting.borrow_mut().push((path, avatar.clone())));
+}
+
+/// Forgets the pictures whose file changed (`uris` as `util::image_uri`
+/// writes them: a new profile picture keeps the old one's file name) and
+/// gives the avatars showing them the new one.
+pub fn forget(uris: &[String]) {
+    if uris.is_empty() {
+        return;
+    }
+    let changed: Vec<PathBuf> = CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let changed: Vec<PathBuf> = cache
+            .photos
+            .keys()
+            .map(|(path, _)| path)
+            .filter(|path| uris.contains(&whatsawra::util::image_uri(path)))
+            .cloned()
+            .collect();
+        cache.photos.retain(|(path, _), _| !changed.contains(path));
+        changed
+    });
+    if changed.is_empty() {
+        return;
+    }
+    let showing: Vec<(PathBuf, awra::Avatar)> = SHOWING.with(|showing| {
+        showing
+            .borrow()
+            .iter()
+            .filter(|(path, _)| changed.contains(path))
+            .cloned()
+            .collect()
+    });
+    for (path, shown) in showing {
+        // Not the picture it has: `avatar` reads the file again.
+        shown.set_rust_data("picture", None::<PathBuf>);
+        avatar(&shown, Some(&path));
+    }
 }
 
 /// Fills the avatars that waited for `path`, once it is decoded.
@@ -137,34 +189,81 @@ fn load(path: &Path, side: u32) -> Option<awra::Texture> {
             return texture.clone();
         }
         if cache.loading.insert(key.clone()) {
-            let path = path.to_path_buf();
-            std::thread::Builder::new()
-                .name("awra-picture".into())
-                .spawn(move || {
-                    let decoded = decode(&path, side);
-                    awra::glib::invoke(move || {
-                        let texture = decoded.and_then(|(rgba, width, height)| {
-                            awra::Texture::from_rgba(
-                                width as i32,
-                                height as i32,
-                                &rgba,
-                                width as usize * 4,
-                            )
-                        });
-                        CACHE.with(|cache| {
-                            let mut cache = cache.borrow_mut();
-                            cache.loading.remove(&(path.clone(), side));
-                            cache.photos.insert((path.clone(), side), texture);
-                        });
-                        if side == AVATAR_SIDE {
-                            fill_waiting(&path);
-                        }
-                        super::wake();
-                    });
-                })
-                .ok();
+            decoders().ask(key);
         }
         None
+    })
+}
+
+/// The threads that decode pictures. A chat full of photos and clips once
+/// started a thread for each: twenty decodes at a time took every core, and
+/// the window stuttered while they ran. A few decode now, the picture asked
+/// for last first, since it is the one on screen (the chat just opened, the
+/// rows just scrolled to).
+struct Decoders {
+    wanted: std::sync::Mutex<Vec<(PathBuf, u32)>>,
+    more: std::sync::Condvar,
+}
+
+/// How many pictures decode at once.
+const DECODERS: usize = 3;
+
+impl Decoders {
+    fn ask(&self, key: (PathBuf, u32)) {
+        if let Ok(mut wanted) = self.wanted.lock() {
+            wanted.push(key);
+        }
+        self.more.notify_one();
+    }
+
+    fn work(&self) {
+        loop {
+            let (path, side) = {
+                let Ok(mut wanted) = self.wanted.lock() else {
+                    return;
+                };
+                loop {
+                    if let Some(key) = wanted.pop() {
+                        break key;
+                    }
+                    wanted = match self.more.wait(wanted) {
+                        Ok(wanted) => wanted,
+                        Err(_) => return,
+                    };
+                }
+            };
+            let decoded = decode(&path, side);
+            awra::glib::invoke(move || {
+                let texture = decoded.and_then(|(rgba, width, height)| {
+                    awra::Texture::from_rgba(width as i32, height as i32, &rgba, width as usize * 4)
+                });
+                CACHE.with(|cache| {
+                    let mut cache = cache.borrow_mut();
+                    cache.loading.remove(&(path.clone(), side));
+                    cache.photos.insert((path.clone(), side), texture);
+                });
+                if side == AVATAR_SIDE {
+                    fill_waiting(&path);
+                }
+                super::wake();
+            });
+        }
+    }
+}
+
+fn decoders() -> &'static Decoders {
+    static DECODING: std::sync::OnceLock<&'static Decoders> = std::sync::OnceLock::new();
+    DECODING.get_or_init(|| {
+        let decoders: &'static Decoders = Box::leak(Box::new(Decoders {
+            wanted: std::sync::Mutex::new(Vec::new()),
+            more: std::sync::Condvar::new(),
+        }));
+        for _ in 0..DECODERS {
+            let _ = std::thread::Builder::new()
+                .name("awra-picture".into())
+                .spawn(move || decoders.work());
+        }
+        decoders
     })
 }
 

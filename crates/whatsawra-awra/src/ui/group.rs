@@ -35,6 +35,7 @@ struct NewGroup {
     pages: awra::Stack,
     chips: awra::FlowBox,
     search: awra::SearchEntry,
+    typed: super::Typed,
     list: awra::Box,
     empty: awra::Label,
     count: awra::Label,
@@ -86,8 +87,11 @@ impl NewGroup {
         let search = awra::SearchEntry::new();
         search.set_placeholder_text(t("Search contacts"));
         let weak = Rc::downgrade(driver);
+        let typed = super::Typed::default();
+        let noted = typed.clone();
         search.connect_search_changed(move |entry| {
             let text = entry.text();
+            noted.note(&text);
             if let Some(driver) = weak.upgrade() {
                 driver.edit(move |app| app.new_chat_search = text);
             }
@@ -183,6 +187,7 @@ impl NewGroup {
             pages,
             chips,
             search,
+            typed,
             list,
             empty,
             count,
@@ -203,9 +208,7 @@ impl NewGroup {
         let Some(draft) = app.new_group.as_ref() else {
             return;
         };
-        if self.search.text() != app.new_chat_search {
-            self.search.set_text(&app.new_chat_search);
-        }
+        self.typed.follow(&self.search, &app.new_chat_search);
         let chips: Vec<(String, String)> = draft
             .members
             .iter()

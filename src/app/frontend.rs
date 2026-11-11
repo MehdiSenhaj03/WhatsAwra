@@ -11,6 +11,8 @@ impl App {
     /// does around its views. `focused` is whether the window has the
     /// keyboard focus.
     pub fn frontend_turn(&mut self, ctx: &egui::Context, focused: bool) {
+        // This frontend keeps its own textures: it is told which changed.
+        self.stale_pictures.get_or_insert_with(Vec::new);
         self.background_frame(ctx);
         self.settle_pending_reply();
         let locked = self.app_lock.is_locked();
@@ -66,6 +68,15 @@ impl App {
                 .or_insert_with(|| self.cached_avatar(id))
                 .clone()
         })
+    }
+
+    /// The pictures (as `util::image_uri`) whose file changed under them
+    /// since the last call: a new profile picture keeps the old one's name.
+    pub fn take_stale_pictures(&mut self) -> Vec<String> {
+        self.stale_pictures
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
     }
 
     /// Whether nobody has asked WhatsApp for `id`'s picture yet.

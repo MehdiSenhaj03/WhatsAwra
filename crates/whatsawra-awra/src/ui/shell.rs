@@ -425,10 +425,17 @@ impl Shell {
                 _ => 0,
             };
             let dismiss = gettext(app.locale, "Dismiss");
+            // The app's list moves as toasts expire: the one dismissed is
+            // found by its text when the button is pressed, not by where it
+            // stood when it was shown.
+            let message = text.clone();
             self.toasts
                 .show_with_callback(text, dismiss.as_ref(), timeout, move || {
-                    if let Some(driver) = weak.upgrade() {
-                        driver.act(Action::DismissToast(index));
+                    let Some(driver) = weak.upgrade() else { return };
+                    let at = driver
+                        .read(|app| app.toasts.iter().position(|toast| toast.message == message));
+                    if let Some(at) = at {
+                        driver.act(Action::DismissToast(at));
                     }
                 });
         }

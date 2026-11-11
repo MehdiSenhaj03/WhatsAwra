@@ -144,7 +144,8 @@ fn main() {
 }
 
 /// `--stress`: the sample made as large as a busy account, to measure the
-/// window with: four hundred chats, and six hundred messages in the first.
+/// window with: four hundred chats, and six hundred more messages in each
+/// of the sample's own.
 #[cfg(feature = "demo")]
 fn stress(app: &mut app::App) {
     let samples = app.chats.clone();
@@ -156,33 +157,65 @@ fn stress(app: &mut app::App) {
         chat.last_activity -= 60 * (index as i64 + 1);
         app.chats.push(chat);
     }
-    let Some(first) = app.chats.first().map(|chat| chat.id.clone()) else {
-        return;
-    };
-    let conversation = app.conversations.entry(first).or_default();
-    let Some(template) = conversation
-        .messages
-        .iter()
-        .find(|message| matches!(message.content, whatsawra::model::Content::Text { .. }))
-        .cloned()
-    else {
-        return;
-    };
-    let newest = template.timestamp;
-    let mut older = Vec::new();
-    for index in 0..600 {
-        let mut message = template.clone();
-        message.id = format!("stress-{index}");
-        message.from_me = index % 3 == 0;
-        message.timestamp = newest - 600 * 60 + index as i64 * 50;
-        message.content = whatsawra::model::Content::Text {
-            text: format!(
-                "Message {index}: *bold* and _italic_ with a link https://example.com/{index} and an emoji 😀"
-            ),
-            preview: None,
+    // Every sample chat becomes a long one, its own messages last: a switch
+    // between two of them is a switch between two busy chats.
+    let ids: Vec<String> = samples.iter().map(|chat| chat.id.clone()).collect();
+    for id in ids {
+        let conversation = app.conversations.entry(id).or_default();
+        let Some(template) = conversation
+            .messages
+            .iter()
+            .find(|message| matches!(message.content, whatsawra::model::Content::Text { .. }))
+            .cloned()
+        else {
+            continue;
         };
-        older.push(message);
+        let senders: Vec<(String, Option<String>, bool)> = conversation
+            .messages
+            .iter()
+            .map(|message| {
+                (
+                    message.sender.clone(),
+                    message.sender_name.clone(),
+                    message.from_me,
+                )
+            })
+            .collect();
+        let oldest = conversation
+            .messages
+            .first()
+            .map_or(template.timestamp, |message| message.timestamp);
+        let mut older = Vec::new();
+        for index in 0..600usize {
+            let mut message = template.clone();
+            let (sender, name, from_me) = senders[(index / 3) % senders.len()].clone();
+            message.id = format!("stress-{index}");
+            message.sender = sender;
+            message.sender_name = name;
+            message.from_me = from_me;
+            message.quoted = None;
+            message.reactions.clear();
+            message.timestamp = oldest - (600 - index as i64) * 500;
+            let text = match index % 5 {
+                0 => format!("Message {index}"),
+                1 => format!(
+                    "Message {index}: *bold* and _italic_ with a link https://example.com/{index} and an emoji 😀"
+                ),
+                2 => format!(
+                    "Message {index}, a longer one that wraps over a few lines in its bubble: \
+                     the quick brown fox jumps over the lazy dog, again and again, until \
+                     the line is long enough to need three of them. 🦊🐶"
+                ),
+                3 => "👍".to_owned(),
+                _ => format!("ok {index}\nsecond line"),
+            };
+            message.content = whatsawra::model::Content::Text {
+                text,
+                preview: None,
+            };
+            older.push(message);
+        }
+        older.append(&mut conversation.messages);
+        conversation.messages = older;
     }
-    older.append(&mut conversation.messages);
-    conversation.messages = older;
 }

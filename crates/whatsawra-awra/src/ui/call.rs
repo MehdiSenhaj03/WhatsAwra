@@ -242,7 +242,7 @@ impl CallScreen {
         self.avatar.set_visible(self.shown_remote.is_none());
         if call.phase == CallPhase::Active {
             // The timer moves on its own.
-            awra::glib::timeout_add_local_once(std::time::Duration::from_millis(500), super::wake);
+            super::wake_after(std::time::Duration::from_millis(500));
         }
         true
     }

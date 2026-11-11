@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use awra::prelude::*;
 
@@ -126,7 +127,23 @@ pub struct ConversationPane {
     /// The bubbles built for the open chat, reused while nothing about them
     /// changes.
     memo: HashMap<String, Memo>,
+    /// The chat whose rows the list holds. It trails `shown_chat` for a
+    /// moment when a chat opens before its messages have come from the
+    /// archive.
+    listed: Option<String>,
+    /// The chat whose first page the list waits for, and since when.
+    awaited: Option<(String, Instant)>,
 }
+
+/// How long the rows of the chat being left stay while the first page of
+/// the one being opened is read from the archive. It usually comes within a
+/// frame or two: swapping then, in one step, spares an empty list flashing
+/// between two chats.
+const FIRST_PAGE_WAIT: Duration = Duration::from_millis(90);
+
+/// More rows than this after the unread divider do not fit under it on a
+/// page: the chat then opens at the divider instead of at its end.
+const UNREAD_PAGE: usize = 8;
 
 impl ConversationPane {
     pub fn build(driver: &Rc<Driver>, locale: Locale) -> Self {
@@ -218,7 +235,7 @@ impl ConversationPane {
         awra::add_style_role(&view, "entry-hover");
         view.set_vexpand(true);
         let weak = Rc::downgrade(driver);
-        view.connect_edge_reached(move |_, edge| {
+        view.connect_edge_reached(move |view, edge| {
             if edge != awra::PositionType::Top {
                 return;
             }
@@ -227,7 +244,10 @@ impl ConversationPane {
             {
                 driver.act(Action::LoadOlder {
                     chat,
-                    explicit: true,
+                    // Only a reader who scrolled up asked for it: a short
+                    // chat is near its top from the start, and a phone that
+                    // has nothing older to send must not be reported then.
+                    explicit: !view.follows(),
                 });
             }
         });
@@ -235,6 +255,9 @@ impl ConversationPane {
 
         let typing = awra::TypingIndicator::new();
         typing.set_margin_start(20);
+        // Room of its own between the messages and the composer.
+        typing.set_margin_top(2);
+        typing.set_margin_bottom(6);
         chat.append(&typing);
 
         // The composer.
@@ -382,6 +405,8 @@ impl ConversationPane {
             emoji,
             reached: None,
             memo: HashMap::new(),
+            listed: None,
+            awaited: None,
         }
     }
 
@@ -400,7 +425,7 @@ impl ConversationPane {
         }
         let switched = self.shown_chat.as_deref() != Some(chat.id.as_str());
         self.sync_header(app, chat, switched);
-        self.sync_messages(driver, app, chat, switched);
+        self.sync_messages(driver, app, chat);
         self.sync_composer(driver, app, chat, switched);
         self.sync_picker(driver, app);
         self.shown_chat = Some(chat.id.clone());
@@ -434,11 +459,34 @@ impl ConversationPane {
         }
     }
 
-    fn sync_messages(&mut self, driver: &Rc<Driver>, app: &App, chat: &Chat, switched: bool) {
-        let messages: &[Message] = app
-            .conversations
-            .get(&chat.id)
-            .map_or(&[], |conversation| conversation.messages.as_slice());
+    fn sync_messages(&mut self, driver: &Rc<Driver>, app: &App, chat: &Chat) {
+        let conversation = app.conversations.get(&chat.id);
+        let messages: &[Message] =
+            conversation.map_or(&[], |conversation| conversation.messages.as_slice());
+        let switched = self.listed.as_deref() != Some(chat.id.as_str());
+        // Opened before its first page has come from the archive: the rows
+        // on screen stay a moment, and the new ones replace them in one step.
+        let unread = messages.is_empty()
+            && chat.last.is_some()
+            && conversation.is_none_or(|conversation| !conversation.complete);
+        if switched && unread && self.listed.is_some() {
+            let since = match &self.awaited {
+                Some((awaited, since)) if *awaited == chat.id => *since,
+                _ => {
+                    let now = Instant::now();
+                    self.awaited = Some((chat.id.clone(), now));
+                    now
+                }
+            };
+            if let Some(left) = FIRST_PAGE_WAIT.checked_sub(since.elapsed())
+                && !left.is_zero()
+            {
+                driver.wake_in(left);
+                return;
+            }
+        }
+        self.awaited = None;
+        self.listed = Some(chat.id.clone());
         if switched {
             self.memo.clear();
         }
@@ -473,7 +521,20 @@ impl ConversationPane {
         if switched {
             let objects: Vec<awra::Object> = items.iter().map(object).collect();
             self.store.splice(0, self.store.n_items(), &objects);
-            self.view.scroll_to_end(false);
+            // Many unread messages: the chat opens where they start, as on
+            // the phone. A few fit on the page, and it opens at its end,
+            // where it keeps following what arrives.
+            let unread = items
+                .iter()
+                .position(|item| matches!(item, Item::Unread { .. }))
+                .filter(|at| items.len() - at > UNREAD_PAGE);
+            match unread {
+                Some(at) => {
+                    self.view
+                        .scroll_to_item(at as u32, awra::ConversationAlign::Top, false)
+                }
+                None => self.view.scroll_to_end(false),
+            }
         } else {
             let list = self.view.delegate();
             super::rows::update(&self.store, &old, &items, Item::key, |position| {
@@ -491,12 +552,28 @@ impl ConversationPane {
             self.reached = None;
             return;
         };
-        if !app
+        let jump = app
             .jump_highlight
             .as_ref()
-            .is_some_and(|jump| jump.message == anchor)
-            || self.reached.as_deref() == Some(anchor)
-        {
+            .is_some_and(|jump| jump.message == anchor);
+        if !jump {
+            // The place the egui list keeps while older messages load: this
+            // list keeps its own. Left set, it outlives the chat, and the
+            // next one opened would be asked to load up to a message of the
+            // one before, which ends in an error.
+            let stale = anchor.to_owned();
+            driver.later(Op::Edit(Box::new(move |app: &mut App| {
+                let jump = app
+                    .jump_highlight
+                    .as_ref()
+                    .is_some_and(|jump| jump.message == stale);
+                if !jump && app.scroll_anchor.as_deref() == Some(stale.as_str()) {
+                    app.scroll_anchor = None;
+                }
+            })));
+            return;
+        }
+        if self.reached.as_deref() == Some(anchor) {
             return;
         }
         let Some(position) = items.iter().position(|item| item.key() == anchor) else {
@@ -553,7 +630,12 @@ impl ConversationPane {
                 let text = quoted
                     .map(|message| app.message_text(message).replace('\n', " "))
                     .unwrap_or_default();
-                format!("{who}: {text}")
+                // A quoted message not loaded yet has no name to show.
+                if who.is_empty() {
+                    text
+                } else {
+                    format!("{who}: {text}")
+                }
             })
         };
         if banner != self.composer_banner || switched {
@@ -563,8 +645,16 @@ impl ConversationPane {
             }
             self.composer_banner = banner;
         }
-        if switched {
-            self.composer.view().grab_focus();
+        // The app says when typing belongs in the composer again: a chat
+        // opened, a reply or an edit started, the viewer or the search left.
+        // A chat opened from a search hit leaves the keyboard in the search.
+        if app.focus_composer {
+            if !recording && !selecting && app.dialog.is_none() {
+                self.composer.view().grab_focus();
+            }
+            driver.later(Op::Edit(Box::new(|app: &mut App| {
+                app.focus_composer = false;
+            })));
         }
     }
 }
@@ -757,7 +847,7 @@ fn first_unread(messages: &[Message], count: u32) -> Option<String> {
     }
     let mut seen = 0;
     for message in messages.iter().rev() {
-        if !message.from_me {
+        if !message.from_me && !whatsawra::model::local_message_id(&message.id) {
             seen += 1;
             if seen == count {
                 return Some(message.id.clone());
@@ -1130,6 +1220,17 @@ fn bind_bubble(widgets: &RowWidgets, bubble: &Bubble) {
     widgets.body.set_markup(&bubble.markup);
     let thumbnail = widgets.driver.upgrade().and_then(|driver| {
         driver.read(|app| {
+            // A clip drawn in its row is on screen; one whose row is gone
+            // is not told so, and pauses after a while out of sight.
+            if matches!(
+                &bubble.media,
+                Some(super::media::MediaView::Picture {
+                    playing: Some(_),
+                    ..
+                })
+            ) {
+                app.video.saw(&bubble.id);
+            }
             let chat = app.open_chat.as_deref()?;
             app.conversations
                 .get(chat)?

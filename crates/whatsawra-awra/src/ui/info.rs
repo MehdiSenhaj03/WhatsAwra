@@ -12,8 +12,13 @@ use whatsawra::app::App;
 use whatsawra::i18n::{Locale, gettext};
 use whatsawra::model::{Action, Chat, Dialog};
 
-/// A chat and its members (id, name, admin), as the pane last showed them.
-type Shown = (String, Vec<(String, String, bool)>);
+/// A chat, its members (id, name, admin) and their pictures, as the pane last
+/// showed them.
+type Shown = (
+    String,
+    Vec<(String, String, bool)>,
+    Vec<Option<std::path::PathBuf>>,
+);
 
 pub struct InfoPane {
     pub root: awra::Box,
@@ -274,7 +279,26 @@ impl InfoPane {
             Vec::new()
         };
         self.members_section.set_visible(!members.is_empty());
-        let key = (chat.id.clone(), members.clone());
+        // Their pictures are part of what the rows show: one that arrives
+        // makes them again, and one never asked for is asked for now.
+        let faces: Vec<Option<std::path::PathBuf>> = members
+            .iter()
+            .map(|(id, _, _)| app.avatar_path(id))
+            .collect();
+        let wanted: Vec<String> = members
+            .iter()
+            .zip(&faces)
+            .filter(|((id, _, _), face)| face.is_none() && app.avatar_unasked(id))
+            .map(|((id, _, _), _)| id.clone())
+            .collect();
+        if !wanted.is_empty() {
+            driver.later(super::Op::Edit(Box::new(move |app: &mut App| {
+                for id in wanted {
+                    app.avatar(&id);
+                }
+            })));
+        }
+        let key = (chat.id.clone(), members.clone(), faces);
         if self.shown.as_ref() != Some(&key) {
             self.members_section.set_title(Some(
                 whatsawra::i18n::ngettext(

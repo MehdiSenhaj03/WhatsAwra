@@ -34,6 +34,7 @@ pub struct Chooser {
     pub dialog: awra::Dialog,
     kind: Kind,
     search: awra::SearchEntry,
+    typed: super::Typed,
     list: awra::Box,
     empty: awra::Label,
     shown: Vec<Row>,
@@ -147,8 +148,11 @@ impl Chooser {
         super::dialogs::close_on_dismiss(driver, &shown, answered);
 
         let weak = Rc::downgrade(driver);
+        let typed = super::Typed::default();
+        let noted = typed.clone();
         search.connect_search_changed(move |entry| {
             let text = entry.text();
+            noted.note(&text);
             if let Some(driver) = weak.upgrade() {
                 driver.edit(move |app| match kind {
                     Kind::NewChat => app.new_chat_search = text,
@@ -160,6 +164,7 @@ impl Chooser {
             dialog: shown,
             kind,
             search,
+            typed,
             list,
             empty,
             shown: Vec::new(),
@@ -225,9 +230,7 @@ impl Chooser {
             Kind::NewChat => &app.new_chat_search,
             Kind::Forward => &app.forward_search,
         };
-        if self.search.text() != *search {
-            self.search.set_text(search);
-        }
+        self.typed.follow(&self.search, search);
         let reviewing = self.kind == Kind::Forward && app.forward_reviewing;
         self.empty.set_visible(rows.is_empty() && !reviewing);
         self.list.set_visible(!reviewing);

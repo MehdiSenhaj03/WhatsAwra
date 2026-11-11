@@ -82,8 +82,7 @@ impl PartialEq for Playing {
 
 fn playing(app: &App, message: &str) -> Option<Playing> {
     let status = app.video.status(message)?;
-    // Drawn in the chat: a clip left out of sight long enough pauses.
-    app.video.saw(message);
+
     let at = status.position.as_secs() as u32;
     Some(Playing {
         paused: status.state == whatsawra::video::State::Paused,

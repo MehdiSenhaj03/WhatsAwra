@@ -11,7 +11,7 @@ thread_local! {
         RefCell::default();
 }
 
-fn on() -> bool {
+pub fn on() -> bool {
     ON.with(|on| match on.get() {
         Some(known) => known,
         None => {

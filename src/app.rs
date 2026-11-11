@@ -486,6 +486,9 @@ pub struct App {
     /// the next frame: it caches a picture by its URI for as long as it is
     /// on screen, and a chat's picture keeps one file name across changes.
     stale_images: Vec<String>,
+    /// The same pictures, kept for a frontend that draws without egui and
+    /// holds its own textures (`take_stale_pictures`); `None` under egui.
+    stale_pictures: Option<Vec<String>>,
     pub composer: String,
     composer_mentions: Vec<ComposerMention>,
     /// The link preview above the composer.
@@ -1579,6 +1582,7 @@ impl App {
             wallpaper_image: crate::wallpaper::CustomImage::default(),
             scroll_chats_to_top: false,
             stale_images: Vec::new(),
+            stale_pictures: None,
             composer: String::new(),
             composer_mentions: Vec::new(),
             composer_preview: None,
@@ -10457,6 +10461,9 @@ impl App {
         // Before this frame's pages: a reader who moved on ends the wait.
         self.end_pending_follow(ctx);
         self.handle_events();
+        if let Some(kept) = &mut self.stale_pictures {
+            kept.extend(self.stale_images.iter().cloned());
+        }
         for uri in std::mem::take(&mut self.stale_images) {
             crate::image_cache::forget(ctx, &uri);
         }

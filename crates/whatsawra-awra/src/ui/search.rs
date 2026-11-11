@@ -24,6 +24,7 @@ struct Hit {
 pub struct SearchPane {
     pub root: awra::Box,
     entry: awra::SearchEntry,
+    typed: super::Typed,
     status: awra::Label,
     list: awra::Box,
     shown: Vec<Hit>,
@@ -117,8 +118,11 @@ impl SearchPane {
         entry.set_placeholder_text(t("Search"));
         entry.set_search_delay(250);
         let weak = Rc::downgrade(driver);
+        let typed = super::Typed::default();
+        let noted = typed.clone();
         entry.connect_search_changed(move |entry| {
             let query = entry.text();
+            noted.note(&query);
             if let Some(driver) = weak.upgrade()
                 && driver.read(|app| app.chat_search != query)
             {
@@ -149,6 +153,7 @@ impl SearchPane {
         Self {
             root,
             entry,
+            typed,
             status,
             list,
             shown: Vec::new(),
@@ -165,9 +170,7 @@ impl SearchPane {
             }
             return false;
         }
-        if self.entry.text() != app.chat_search {
-            self.entry.set_text(&app.chat_search);
-        }
+        self.typed.follow(&self.entry, &app.chat_search);
         let locale = app.locale;
         let searching = !app.chat_search.trim().is_empty() || app.chat_search_day.is_some();
         let status = if !searching {

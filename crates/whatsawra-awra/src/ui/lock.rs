@@ -143,7 +143,7 @@ impl LockScreen {
         }
         if lock.wait_left().is_some() {
             // The countdown moves on its own.
-            awra::glib::timeout_add_local_once(std::time::Duration::from_millis(250), super::wake);
+            super::wake_after(std::time::Duration::from_millis(250));
         }
         let status = if let Some(wait) = lock.wait_left() {
             Some(

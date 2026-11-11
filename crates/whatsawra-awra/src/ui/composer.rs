@@ -150,7 +150,7 @@ impl Recording {
         let shown = &levels[levels.len().saturating_sub(64)..];
         self.waveform.set_peaks(shown);
         // The time and bars move while the microphone listens.
-        awra::glib::timeout_add_local_once(std::time::Duration::from_millis(100), super::wake);
+        super::wake_after(std::time::Duration::from_millis(100));
         true
     }
 }
