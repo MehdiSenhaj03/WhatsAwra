@@ -379,6 +379,25 @@ pub fn run(app: App, options: Options) {
                 other.render_offscreen(true);
                 other.snapshot_png(&format!("{}-win{index}.png", stem.display()));
             }
+            // WHATSAWRA_SWITCH=<n>: opens the n-th chat and shoots the frames that
+            // follow, every 16 ms, to see how a switch looks while it happens.
+            if let Some(index) = std::env::var("WHATSAWRA_SWITCH")
+                .ok()
+                .and_then(|n| n.parse::<usize>().ok())
+            {
+                let chat =
+                    driver.read(|app| app.visible_chats().get(index).map(|chat| chat.id.clone()));
+                if let Some(chat) = chat {
+                    driver.act(whatsawra::model::Action::OpenChat(chat));
+                }
+                let stem = path.with_extension("");
+                for frame in 0..12 {
+                    awra::pump();
+                    std::thread::sleep(Duration::from_millis(16));
+                    window.render_offscreen(true);
+                    window.snapshot_png(&format!("{}-f{frame:02}.png", stem.display()));
+                }
+            }
             let drawn = window.render_offscreen(true);
             if std::env::var_os("WHATSAWRA_SHOT_DEBUG").is_some() {
                 let (min, natural, _, _) = window.measure(awra::Orientation::Horizontal, -1);
