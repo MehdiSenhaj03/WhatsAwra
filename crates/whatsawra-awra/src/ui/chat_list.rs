@@ -474,3 +474,10 @@ impl ChatList {
         awra::menu::popup_at(&self.list, 120.0, 40.0, entries);
     }
 }
+
+impl ChatList {
+    /// Puts the keyboard in the search field.
+    pub fn focus_search(&self) {
+        self.search.grab_focus();
+    }
+}

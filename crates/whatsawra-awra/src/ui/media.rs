@@ -16,6 +16,9 @@ use whatsawra::model::{Action, Content, MediaState, Message};
 const PICTURE_WIDTH: f64 = 300.0;
 const PICTURE_HEIGHT: f64 = 340.0;
 const STICKER_SIDE: f64 = 150.0;
+/// A picture or video with nothing to show yet.
+const EMPTY_WIDTH: i32 = 220;
+const EMPTY_HEIGHT: i32 = 124;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MediaView {
@@ -61,11 +64,17 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
         && app.account().settings.auto_download
         && media.is_within_download_limit();
     let picture = |sticker: bool, video: Option<String>| {
-        let (width, height) = fit(
-            media.width.unwrap_or(0) as f64,
-            media.height.unwrap_or(0) as f64,
-            sticker,
-        );
+        // Nothing to show yet (no file, no thumbnail): a small frame, not
+        // a picture-sized hole.
+        let (width, height) = if media.path.is_none() && message.thumbnail.is_none() && !sticker {
+            (EMPTY_WIDTH, EMPTY_HEIGHT)
+        } else {
+            fit(
+                media.width.unwrap_or(0) as f64,
+                media.height.unwrap_or(0) as f64,
+                sticker,
+            )
+        };
         MediaView::Picture {
             ready: media.path.as_deref().is_some_and(pictures::photo_ready),
             path: media.path.clone(),
@@ -109,7 +118,7 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
             file_name, pages, ..
         } => {
             let mut detail = whatsawra::util::bytes(media.size);
-            if let Some(pages) = pages {
+            if let Some(pages) = pages.filter(|pages| *pages > 0) {
                 detail = format!("{pages} pages · {detail}");
             }
             MediaView::Document {

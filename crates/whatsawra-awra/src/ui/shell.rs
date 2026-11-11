@@ -61,7 +61,9 @@ struct Rail {
     starred: awra::RailItem,
     archived: awra::RailItem,
     settings: awra::RailItem,
-    account: awra::RailItem,
+    /// Who is linked: our face in the window's top-left corner, over
+    /// the rail (the shell puts it in the header).
+    pub account: awra::Button,
     account_avatar: awra::Avatar,
 }
 
@@ -78,9 +80,12 @@ impl Rail {
         let starred = item("Starred", "starred-symbolic");
         let archived = item("Archived", "awra-archive-symbolic");
         let settings = item("Settings", "emblem-system-symbolic");
-        let account = awra::RailItem::new(Some(gettext(locale, "Accounts").as_ref()));
-        let account_avatar = awra::Avatar::new(32, None);
+        let account_avatar = awra::Avatar::new(30, None);
+        let account = awra::Button::new();
         account.set_child(Some(&account_avatar));
+        account.set_appearance(awra::ButtonAppearance::Toolbar);
+        account.set_halign(awra::Align::Center);
+        account.set_valign(awra::Align::Center);
         let header = awra::Box::new(awra::Orientation::Vertical, RAIL_GAP);
         header.append(&chats);
         header.append(&calls);
@@ -90,7 +95,6 @@ impl Rail {
         rail.append(&archived);
         let footer = awra::Box::new(awra::Orientation::Vertical, RAIL_GAP);
         footer.append(&settings);
-        footer.append(&account);
         footer.set_margin_bottom(RAIL_GAP);
         rail.set_footer(Some(&footer));
 
@@ -108,6 +112,13 @@ impl Rail {
         starred.connect_activate(on(|| Action::ToggleStarred));
         archived.connect_activate(on(|| Action::ShowArchived(true)));
         settings.connect_activate(on(|| Action::Open(Page::Settings)));
+        // The account's place is in Settings until the account switcher.
+        let weak = Rc::downgrade(driver);
+        account.connect_clicked(move |_| {
+            if let Some(driver) = weak.upgrade() {
+                driver.act(Action::Open(Page::Settings));
+            }
+        });
         Self {
             rail,
             chats,
@@ -142,9 +153,7 @@ impl Rail {
             .set_visible(!app.starred.is_empty() || app.show_starred);
         let title = app.self_title();
         self.account_avatar.set_text(Some(&title));
-        self.account.set_label(Some(&title));
-        self.account
-            .set_unread(app.unread_chat_count_elsewhere() > 0);
+        self.account.set_tooltip_text(Some(title.as_str()));
         let me = app.me.clone();
         let picture = me
             .as_deref()
@@ -169,12 +178,18 @@ impl Shell {
         header.set_compact(true);
         let start = awra::Box::new(awra::Orientation::Horizontal, 0);
         start.set_size_request(HEADER_START_WIDTH, -1);
-        let rail_room = awra::Box::new(awra::Orientation::Horizontal, 0);
-        rail_room.set_size_request(RAIL_WIDTH - HEADER_INSET, -1);
-        start.append(&rail_room);
+        // Our face over the rail's column, centred on it: the corner names
+        // who is linked instead of standing empty.
+        let corner = awra::Box::new(awra::Orientation::Horizontal, 0);
+        corner.set_size_request(2 * (RAIL_WIDTH / 2 - HEADER_INSET), -1);
+        corner.append(&rail.account);
+        start.append(&corner);
         chats.heading.set_hexpand(true);
         chats.heading.set_valign(awra::Align::Center);
-        chats.heading.set_margin_start(16);
+        // The heading starts where the list's rows do.
+        chats
+            .heading
+            .set_margin_start(RAIL_WIDTH + 16 - HEADER_INSET - 2 * (RAIL_WIDTH / 2 - HEADER_INSET));
         chats.heading.set_margin_end(8);
         start.append(&chats.heading);
         header.set_start_widget(Some(&start));
@@ -353,6 +368,11 @@ impl Shell {
         if std::env::var_os("AWRA_APPEARANCE").is_none() {
             awra::StyleManager::default().set_appearance(appearance);
         }
+    }
+
+    /// Where the keyboard starts: the open chat's composer, else the search.
+    pub fn focus_start(&self) {
+        self.chats.focus_search();
     }
 
     /// Opens a context menu as a right click would (shots of menus).

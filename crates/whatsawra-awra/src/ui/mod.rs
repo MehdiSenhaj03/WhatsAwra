@@ -295,6 +295,10 @@ pub fn run(app: App, options: Options) {
     driver.turn();
     window.present();
     driver.app.borrow_mut().start_backends();
+    // The keyboard starts in the search, not on the window's buttons.
+    if let Some(shell) = driver.shell.borrow().as_ref() {
+        shell.focus_start();
+    }
     match options.shot {
         Some(path) => {
             // Let a few turns settle (pictures, the first page of messages).
