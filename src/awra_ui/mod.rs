@@ -51,6 +51,7 @@ pub struct Driver {
     /// Set while the views write to their widgets, whose signals would
     /// otherwise queue the very values the views just wrote.
     syncing: Cell<bool>,
+    demo: Cell<bool>,
 }
 
 thread_local! {
@@ -67,6 +68,9 @@ pub struct Options {
     pub size: Option<(i32, i32)>,
     /// The waker the app's backends were made with, which wakes this loop.
     pub waker: Option<crate::backend::Waker>,
+    /// The offline sample: the commands the views send are answered here,
+    /// as the egui demo answers them.
+    pub demo: bool,
     /// For a shot: open a menu first (`message`: the newest message's, `chat`:
     /// the first chat's).
     pub menu: Option<String>,
@@ -84,6 +88,7 @@ impl Driver {
             alarm: Cell::new(None),
             shell: RefCell::new(None),
             syncing: Cell::new(false),
+            demo: Cell::new(false),
         });
         DRIVER.with(|slot| *slot.borrow_mut() = Rc::downgrade(&driver));
         // The app's waker and its timed requests reach Awra's loop from any
@@ -202,6 +207,10 @@ impl Driver {
                 .run_ui(input, |ui| app.frontend_turn(ui.ctx(), focused));
             // Nothing paints the context, so its texture uploads go nowhere.
             output.textures_delta.clear();
+            #[cfg(feature = "demo")]
+            if self.demo.get() {
+                crate::demo::tour::respond(&mut app);
+            }
         }
         self.sync();
     }
@@ -241,6 +250,7 @@ impl Driver {
 pub fn run(app: App, options: Options) {
     let application = awra::Application::new("rocks.whatsawra.WhatsAwra");
     let driver = Driver::new(app);
+    driver.demo.set(options.demo);
     if let Some(waker) = &options.waker {
         waker.attach(&driver.ctx);
     }

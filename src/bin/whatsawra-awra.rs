@@ -123,6 +123,7 @@ fn main() {
             size,
             waker: Some(waker),
             menu: arg_value(&args, "--menu"),
+            demo,
         },
     );
     drop(instance);
