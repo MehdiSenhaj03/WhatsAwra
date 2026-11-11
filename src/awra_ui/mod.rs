@@ -17,6 +17,7 @@ mod conversation;
 mod dialogs;
 mod emoji;
 mod info;
+mod lock;
 mod login;
 mod media;
 mod menus;

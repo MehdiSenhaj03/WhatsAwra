@@ -21,6 +21,7 @@ pub struct Shell {
     toasts: awra::ToastOverlay,
     pages: awra::Stack,
     login: Login,
+    lock: super::lock::LockScreen,
     rail: Rail,
     chats: ChatList,
     conversation: ConversationPane,
@@ -181,6 +182,8 @@ impl Shell {
         pages.set_transition_type(awra::StackTransitionType::Crossfade);
         pages.add_named(&login.root, Some("login"));
         pages.add_named(&main, Some("main"));
+        let lock = super::lock::LockScreen::build(driver, locale);
+        pages.add_named(&lock.root, Some("lock"));
 
         let toasts = awra::ToastOverlay::new();
         toasts.set_child(Some(&pages));
@@ -192,6 +195,7 @@ impl Shell {
             toasts,
             pages,
             login,
+            lock,
             rail,
             chats,
             conversation,
@@ -210,11 +214,24 @@ impl Shell {
     }
 
     pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
-        let page = if app.is_linked() { "main" } else { "login" };
+        let locked = app.app_lock.is_locked();
+        let page = if locked {
+            "lock"
+        } else if app.is_linked() {
+            "main"
+        } else {
+            "login"
+        };
         if self.pages.visible_child_name().as_deref() != Some(page) {
             self.pages.set_visible_child_name(page);
         }
         self.sync_theme(app);
+        if locked {
+            // Nothing but the lock screen while locked: no dialog, no toast.
+            self.lock.sync(app);
+            self.dialogs.close();
+            return;
+        }
         if app.is_linked() {
             self.rail.sync(app);
             let place = match app.page {

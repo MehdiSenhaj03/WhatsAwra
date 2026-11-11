@@ -19,6 +19,15 @@ impl Dialogs {
         Self { shown: None }
     }
 
+    /// Closes the open dialog without answering it (the lock hides it; the
+    /// app keeps it, and it opens again once unlocked).
+    pub fn close(&mut self) {
+        if let Some((_, old)) = self.shown.take() {
+            old.set_rust_data("closed-by-app", true);
+            old.close();
+        }
+    }
+
     pub fn sync(&mut self, driver: &Rc<Driver>, app: &App, window: &awra::Window) {
         if self.shown.as_ref().map(|(dialog, _)| dialog) == app.dialog.as_ref() {
             return;
