@@ -76,3 +76,9 @@ Source: "..\..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 Source: "whatsawra-installer.txt"; DestDir: "{app}"; Flags: ignoreversion
 
+[Icons]
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; AppUserModelID: "me.paolino.whatsawra"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon; AppUserModelID: "me.paolino.whatsawra"
+
+[Run]
+Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
