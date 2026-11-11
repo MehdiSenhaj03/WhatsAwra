@@ -16,12 +16,19 @@ use crate::model::{Action, Page};
 
 pub struct Shell {
     pub window: awra::Window,
+    /// The language the views were made in.
+    pub locale: crate::i18n::Locale,
     toasts: awra::ToastOverlay,
     pages: awra::Stack,
     login: Login,
     rail: Rail,
     chats: ChatList,
     conversation: ConversationPane,
+    /// What the area beside the rail shows: the chats or a page.
+    places: awra::Stack,
+    settings: super::settings::SettingsPage,
+    /// The theme last given to Awra.
+    theme: Option<crate::settings::ThemeChoice>,
     dialogs: super::dialogs::Dialogs,
     /// Toasts already shown, by their place in `App::toasts` and text.
     shown_toasts: Vec<String>,
@@ -143,10 +150,16 @@ impl Shell {
         split.set_sidebar_width(340);
         split.set_content(Some(&conversation.root));
 
+        let settings = driver.read(|app| super::settings::SettingsPage::build(driver, app));
+        let places = awra::Stack::new();
+        places.set_transition_type(awra::StackTransitionType::Crossfade);
+        places.set_hexpand(true);
+        places.add_named(&split, Some("chats"));
+        places.add_named(&settings.root, Some("settings"));
+
         let main = awra::Box::new(awra::Orientation::Horizontal, 0);
         main.append(&rail.rail);
-        split.set_hexpand(true);
-        main.append(&split);
+        main.append(&places);
 
         let pages = awra::Stack::new();
         pages.set_transition_type(awra::StackTransitionType::Crossfade);
@@ -159,12 +172,16 @@ impl Shell {
 
         Self {
             window,
+            locale,
             toasts,
             pages,
             login,
             rail,
             chats,
             conversation,
+            places,
+            settings,
+            theme: None,
             dialogs: super::dialogs::Dialogs::new(),
             shown_toasts: Vec::new(),
         }
@@ -175,8 +192,19 @@ impl Shell {
         if self.pages.visible_child_name().as_deref() != Some(page) {
             self.pages.set_visible_child_name(page);
         }
+        self.sync_theme(app);
         if app.is_linked() {
             self.rail.sync(app);
+            let place = match app.page {
+                Page::Settings => "settings",
+                _ => "chats",
+            };
+            if self.places.visible_child_name().as_deref() != Some(place) {
+                self.places.set_visible_child_name(place);
+            }
+            if place == "settings" {
+                self.settings.sync(app);
+            }
             self.chats.sync(driver, app);
             self.conversation.sync(driver, app);
         } else {
@@ -184,6 +212,25 @@ impl Shell {
         }
         self.dialogs.sync(driver, app, &self.window);
         self.sync_toasts(driver, app);
+    }
+
+    /// Awra's appearance follows the theme chosen in Settings; Messages,
+    /// a macOS look, follows the system here.
+    fn sync_theme(&mut self, app: &App) {
+        use crate::settings::ThemeChoice;
+        if self.theme == Some(app.settings.theme) {
+            return;
+        }
+        self.theme = Some(app.settings.theme);
+        let appearance = match app.settings.theme {
+            ThemeChoice::Light => awra::Appearance::Light,
+            ThemeChoice::Dark => awra::Appearance::Dark,
+            ThemeChoice::System | ThemeChoice::Messages => awra::Appearance::System,
+        };
+        // A shot asked for one appearance keeps it.
+        if std::env::var_os("AWRA_APPEARANCE").is_none() {
+            awra::StyleManager::default().set_appearance(appearance);
+        }
     }
 
     /// Opens a context menu as a right click would (shots of menus).

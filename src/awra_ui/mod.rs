@@ -18,6 +18,7 @@ mod login;
 mod media;
 mod menus;
 mod pictures;
+mod settings;
 mod shell;
 
 use std::cell::{Cell, RefCell};
@@ -208,6 +209,26 @@ impl Driver {
     fn sync(self: &Rc<Self>) {
         let app = self.app.borrow();
         self.syncing.set(true);
+        // The views are made in the interface language: a new one remakes them.
+        let relabel = self
+            .shell
+            .borrow()
+            .as_ref()
+            .is_some_and(|shell| shell.locale != app.locale);
+        if relabel {
+            let window = self
+                .shell
+                .borrow()
+                .as_ref()
+                .map(|shell| shell.window.clone());
+            if let Some(window) = window {
+                drop(app);
+                let shell = shell::Shell::build(self, window);
+                *self.shell.borrow_mut() = Some(shell);
+                self.syncing.set(false);
+                return self.sync();
+            }
+        }
         if let Some(shell) = self.shell.borrow_mut().as_mut() {
             shell.sync(self, &app);
         }

@@ -5,6 +5,7 @@
 //! `--shot <png>` renders the window offscreen to a picture and quits;
 //! `--size WxH` sets the shot's size; `--open <n>` opens the n-th chat;
 //! `--page <flags>` applies the demo's sample states (as `whatsawra --demo-page`).
+//! `--place settings` or `--place calls` opens that page.
 #![windows_subsystem = "windows"]
 
 use std::path::PathBuf;
@@ -101,6 +102,15 @@ fn main() {
         && let Some(chat) = app.visible_chats().get(index).map(|chat| chat.id.clone())
     {
         app.queue(whatsawra::model::Action::OpenChat(chat));
+    }
+    match arg_value(&args, "--place").as_deref() {
+        Some("settings") => app.queue(whatsawra::model::Action::Open(
+            whatsawra::model::Page::Settings,
+        )),
+        Some("calls") => app.queue(whatsawra::model::Action::Open(
+            whatsawra::model::Page::Calls,
+        )),
+        _ => {}
     }
     awra_ui::run(
         app,
