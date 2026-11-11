@@ -22,6 +22,9 @@ const TABS: [(PickerTab, &str); 3] = [
     (PickerTab::Stickers, "stickers"),
 ];
 
+/// A titled run of stickers: favourites, recent, a pack.
+type Shelf = (String, Vec<PathBuf>);
+
 /// A picture in a grid, filled once its file is decoded.
 struct Tile {
     path: Option<PathBuf>,
@@ -100,7 +103,7 @@ pub struct Picker {
     // Stickers.
     sticker_list: awra::Box,
     sticker_tiles: Vec<Tile>,
-    sticker_shown: Option<(bool, Vec<(String, Vec<PathBuf>)>)>,
+    sticker_shown: Option<(bool, Vec<Shelf>)>,
 }
 
 impl Picker {
@@ -340,7 +343,7 @@ impl Picker {
 
     fn sync_stickers(&mut self, app: &App) {
         let t = |text: &'static str| gettext(self.locale, text).into_owned();
-        let mut sections: Vec<(String, Vec<PathBuf>)> = Vec::new();
+        let mut sections: Vec<Shelf> = Vec::new();
         for (title, stickers) in [
             (t("Favorites"), &app.stickers_saved),
             (t("Recent"), &app.stickers),

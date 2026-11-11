@@ -478,14 +478,13 @@ pub struct TextSetting {
 }
 
 impl TextSetting {
-    #[allow(clippy::too_many_arguments)]
+    /// `labels` are the row's title, its description and the field's
+    /// placeholder.
     pub fn build(
         driver: &Rc<Driver>,
         locale: Locale,
         section: &awra::Section,
-        title: &str,
-        description: &str,
-        placeholder: &str,
+        [title, description, placeholder]: [&str; 3],
         get: fn(&App) -> String,
         apply: fn(&mut App, String),
     ) -> Self {
@@ -725,7 +724,7 @@ impl Live for Blocked {
                 )
             })
             .collect();
-        rows.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        rows.sort_by_key(|row| row.1.to_lowercase());
         self.status.set_visible(rows.is_empty());
         self.status
             .set_text(&gettext(locale, "No blocked contacts"));

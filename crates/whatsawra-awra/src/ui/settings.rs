@@ -133,9 +133,11 @@ impl SettingsPage {
             driver,
             locale,
             &chats,
-            &t("GIPHY API key"),
-            &t("For GIF search. Create a free key at developers.giphy.com."),
-            "",
+            [
+                &t("GIPHY API key"),
+                &t("For GIF search. Create a free key at developers.giphy.com."),
+                "",
+            ],
             |app| app.settings.giphy_key.clone(),
             |app, key| {
                 app.settings.giphy_key = key;
@@ -247,11 +249,13 @@ impl SettingsPage {
             driver,
             locale,
             &system,
-            &t("Proxy"),
-            &t(
-                "socks5:// or http:// with host and port. Empty follows the system's proxy settings.",
-            ),
-            "socks5://127.0.0.1:1080",
+            [
+                &t("Proxy"),
+                &t(
+                    "socks5:// or http:// with host and port. Empty follows the system's proxy settings.",
+                ),
+                "socks5://127.0.0.1:1080",
+            ],
             |app| app.settings.proxy.clone(),
             |app, proxy| app.queue(Action::SetProxy(proxy)),
         );
