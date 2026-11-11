@@ -253,7 +253,7 @@ impl CallScreen {
 
 /// Puts a video frame in `image` when it is a new one; returns which frame
 /// is shown (its address), `None` when there is none.
-fn show_frame(
+pub(super) fn show_frame(
     image: &awra::Image,
     frame: Option<&Arc<egui::ColorImage>>,
     shown: Option<usize>,

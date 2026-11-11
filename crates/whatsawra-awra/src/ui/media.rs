@@ -4,6 +4,7 @@
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::{Rc, Weak};
+use std::sync::Arc;
 
 use awra::prelude::*;
 
@@ -34,6 +35,8 @@ pub enum MediaView {
         video: Option<String>,
         loading: bool,
         failed: Option<String>,
+        /// The clip playing in the bubble, when it is this one.
+        playing: Option<Playing>,
     },
     Voice {
         path: Option<PathBuf>,
@@ -51,6 +54,50 @@ pub enum MediaView {
     },
 }
 
+/// A clip playing in its bubble: its frame and where it is.
+#[derive(Clone, Debug)]
+pub struct Playing {
+    pub paused: bool,
+    pub muted: bool,
+    /// "0:12 / 0:40".
+    pub time: String,
+    pub frame: Option<Arc<egui::ColorImage>>,
+}
+
+impl PartialEq for Playing {
+    fn eq(&self, other: &Self) -> bool {
+        self.paused == other.paused
+            && self.muted == other.muted
+            && self.time == other.time
+            && match (&self.frame, &other.frame) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+fn playing(app: &App, message: &str) -> Option<Playing> {
+    let status = app.video.status(message)?;
+    // Drawn in the chat: a clip left out of sight long enough pauses.
+    app.video.saw(message);
+    let at = status.position.as_secs() as u32;
+    Some(Playing {
+        paused: status.state == whatsawra::video::State::Paused,
+        muted: app.video.muted(),
+        time: if status.total.is_zero() {
+            whatsawra::util::duration(at)
+        } else {
+            format!(
+                "{} / {}",
+                whatsawra::util::duration(at),
+                whatsawra::util::duration(status.total.as_secs() as u32)
+            )
+        },
+        frame: status.image,
+    })
+}
+
 /// What a message shows of its media, and whether to fetch it now.
 pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
     let media = message.content.media()?;
@@ -64,6 +111,7 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
         && app.account().settings.auto_download
         && media.is_within_download_limit();
     let picture = |sticker: bool, video: Option<String>| {
+        let playing = video.as_ref().and_then(|_| playing(app, &message.id));
         // Nothing to show yet (no file, no thumbnail): a small frame, not
         // a picture-sized hole.
         let (width, height) = if media.path.is_none() && message.thumbnail.is_none() && !sticker {
@@ -85,6 +133,7 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
             video,
             loading,
             failed: failed.clone(),
+            playing,
         }
     };
     let view = match &message.content {
@@ -155,6 +204,9 @@ pub struct MediaWidgets {
     pub root: awra::Box,
     picture: awra::Image,
     picture_badge: awra::Label,
+    sound: awra::Button,
+    /// The frame on screen, by address, while a clip plays.
+    frame: Rc<std::cell::Cell<Option<usize>>>,
     voice: awra::Box,
     play: awra::Button,
     waveform: awra::WaveformView,
@@ -182,6 +234,21 @@ impl MediaWidgets {
         picture_badge.set_margin_bottom(8);
         picture_badge.set_weight(600);
         overlay.add_overlay(&picture_badge);
+        // A playing clip's sound, in its top corner.
+        let sound = awra::Button::from_icon_name("audio-volume-high-symbolic");
+        sound.set_appearance(awra::ButtonAppearance::Secondary);
+        sound.set_halign(awra::Align::End);
+        sound.set_valign(awra::Align::Start);
+        sound.set_margin_top(6);
+        sound.set_margin_end(6);
+        sound.set_visible(false);
+        let weak = driver.clone();
+        sound.connect_clicked(move |_| {
+            if let Some(driver) = weak.upgrade() {
+                driver.act(Action::ToggleVideoSound);
+            }
+        });
+        overlay.add_overlay(&sound);
         root.append(&overlay);
         click(&picture, driver, &shown);
 
@@ -254,6 +321,8 @@ impl MediaWidgets {
             root,
             picture,
             picture_badge,
+            sound,
+            frame: Rc::default(),
             voice,
             play,
             waveform,
@@ -291,6 +360,7 @@ impl MediaWidgets {
                 video,
                 loading,
                 failed,
+                playing,
                 ..
             } => {
                 self.picture.set_size_request(*width, *height);
@@ -303,8 +373,35 @@ impl MediaWidgets {
                     .as_deref()
                     .and_then(pictures::photo)
                     .or_else(|| thumbnail.and_then(|jpeg| pictures::thumbnail(message, jpeg)));
-                self.picture.set_texture(texture.as_ref());
-                let badge = if let Some(error) = failed {
+                match playing.as_ref().and_then(|playing| playing.frame.as_ref()) {
+                    // The clip's own frame, once one is decoded.
+                    Some(frame) => {
+                        let shown = self.frame.get();
+                        self.frame.set(super::call::show_frame(
+                            &self.picture,
+                            Some(frame),
+                            shown,
+                            None,
+                        ));
+                    }
+                    None => {
+                        self.frame.set(None);
+                        self.picture.set_visible(true);
+                        self.picture.set_texture(texture.as_ref());
+                    }
+                }
+                self.sound.set_visible(playing.is_some());
+                if let Some(playing) = playing {
+                    self.sound.set_icon_name(Some(if playing.muted {
+                        "audio-volume-muted-symbolic"
+                    } else {
+                        "audio-volume-high-symbolic"
+                    }));
+                }
+                let badge = if let Some(playing) = playing {
+                    let sign = if playing.paused { "▶" } else { "⏸" };
+                    format!("{sign} {}", playing.time)
+                } else if let Some(error) = failed {
                     format!("⚠ {error}")
                 } else if *loading {
                     "⭳ …".to_owned()

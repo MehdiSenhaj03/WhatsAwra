@@ -57,6 +57,8 @@ pub struct Status {
     pub total: Duration,
     /// The frame to draw, once one has been decoded.
     pub frame: Option<TextureHandle>,
+    /// The same frame's pixels, for a frontend that draws them itself.
+    pub image: Option<Arc<ColorImage>>,
 }
 
 impl Status {
@@ -907,6 +909,7 @@ impl Player {
             },
             total: session.total,
             frame: session.texture.clone(),
+            image: session.last_frame.clone(),
         })
     }
 
