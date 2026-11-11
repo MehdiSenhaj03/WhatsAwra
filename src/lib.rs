@@ -11,6 +11,8 @@ pub mod appearance;
 pub mod archive;
 pub mod audio;
 pub mod autostart;
+#[cfg(feature = "awra-ui")]
+pub mod awra_ui;
 pub mod backdrop;
 pub mod backend;
 pub mod bidi;
@@ -42,6 +44,7 @@ pub mod new_group;
 pub mod notify;
 pub mod opener;
 pub mod paths;
+pub mod present;
 pub mod privacy;
 pub mod proxy;
 pub mod qr;

@@ -221,6 +221,63 @@ pub fn plain(text: &str, mentions: &[Mention]) -> String {
         .collect()
 }
 
+/// The text as Pango-style markup (`<b>`, `<i>`, `<s>`, `<tt>`, `<a>`),
+/// which Awra's labels draw: the same reading of WhatsApp's markers, links
+/// and mentions as [`layout`], for a toolkit that lays text out itself.
+/// Mentions link to `mention:<id>` and are tinted `mention`; a quoted line's
+/// bar is tinted `secondary`.
+pub fn pango(text: &str, mentions: &[Mention], mention: &str, secondary: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 16);
+    for span in parse(text, mentions) {
+        let mut open = String::new();
+        let mut close = Vec::new();
+        let mut tag = |opening: String, closing: &'static str| {
+            open.push_str(&opening);
+            close.push(closing);
+        };
+        if let Some(link) = &span.link {
+            tag(format!("<a href=\"{}\">", escape(link)), "</a>");
+        }
+        if span.mention {
+            tag(format!("<span foreground=\"{mention}\">"), "</span>");
+        } else if span.quote && span.text.starts_with('▎') {
+            tag(format!("<span foreground=\"{secondary}\">"), "</span>");
+        }
+        if span.bold {
+            tag("<b>".to_owned(), "</b>");
+        }
+        if span.italic {
+            tag("<i>".to_owned(), "</i>");
+        }
+        if span.strike {
+            tag("<s>".to_owned(), "</s>");
+        }
+        if span.mono {
+            tag("<tt>".to_owned(), "</tt>");
+        }
+        out.push_str(&open);
+        out.push_str(&escape(&span.text));
+        for closing in close.into_iter().rev() {
+            out.push_str(closing);
+        }
+    }
+    out
+}
+
+fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// Replaces mention ids with names without parsing other markup.
 pub fn name_mentions(text: &str, mentions: &[Mention]) -> String {
     if mentions.is_empty() {

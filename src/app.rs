@@ -12370,6 +12370,8 @@ fn notification_eligible(chat: &Chat, now: i64, message_at: i64) -> bool {
 }
 
 mod calls;
+#[cfg(feature = "awra-ui")]
+mod frontend;
 pub use calls::CallPerson;
 
 /// The character ranges of `text` to wrap in `format`'s markers for a

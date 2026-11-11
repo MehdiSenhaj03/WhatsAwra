@@ -1002,71 +1002,12 @@ pub(crate) fn header_row_id() -> egui::Id {
 
 /// Chat-header subtitle.
 fn subtitle(app: &App, chat: &Chat) -> (String, Color32) {
-    let palette = app.palette;
-    let typing = app.typing_in(&chat.id);
-    if !typing.is_empty() {
-        let activity = typing[0].2;
-        let text = if chat.is_group() {
-            let describe = |activity| {
-                let names: Vec<&str> = typing
-                    .iter()
-                    .filter(|(_, _, other)| *other == activity)
-                    .map(|(_, name, _)| name.as_str())
-                    .collect();
-                match (activity, names.as_slice()) {
-                    (_, []) => None,
-                    (ChatActivity::RecordingAudio, [one]) => Some(
-                        crate::i18n::gettext(app.locale, "{name} is recording audio…")
-                            .replace("{name}", one),
-                    ),
-                    (ChatActivity::RecordingAudio, [rest @ .., last]) => Some(
-                        crate::i18n::gettext(app.locale, "{names} and {last} are recording audio…")
-                            .replace("{names}", &rest.join(", "))
-                            .replace("{last}", last),
-                    ),
-                    (_, [one]) => Some(format!("{one} is typing…")),
-                    (_, [rest @ .., last]) => {
-                        Some(format!("{} and {last} are typing…", rest.join(", ")))
-                    }
-                }
-            };
-            [ChatActivity::Typing, ChatActivity::RecordingAudio]
-                .into_iter()
-                .filter_map(describe)
-                .collect::<Vec<_>>()
-                .join(" · ")
-        } else if activity == ChatActivity::RecordingAudio {
-            crate::i18n::gettext(app.locale, "recording audio…").into_owned()
-        } else {
-            "typing…".to_owned()
-        };
-        return (text, palette.accent);
-    }
-    if chat.is_group() {
-        let names = app.participant_names(chat);
-        return (
-            if names.is_empty() {
-                "Group".to_owned()
-            } else {
-                names
-            },
-            palette.secondary,
-        );
-    }
-    if let Some(presence) = app.presence.get(&chat.id) {
-        if presence.online {
-            return ("online".to_owned(), palette.accent);
-        }
-        if let Some(seen) = presence.last_seen {
-            return (crate::util::last_seen(app.locale, seen), palette.secondary);
-        }
-    }
-    match chat.phone() {
-        Some(phone) if !app.is_saved_contact(&chat.id) => {
-            (crate::util::phone(phone), palette.secondary)
-        }
-        _ => (String::new(), palette.secondary),
-    }
+    let (text, tone) = crate::present::chat_subtitle(app, chat);
+    let colour = match tone {
+        crate::present::Tone::Accent => app.palette.accent,
+        crate::present::Tone::Secondary => app.palette.secondary,
+    };
+    (text, colour)
 }
 
 /// Byte position of a freshly typed standalone trigger immediately before
