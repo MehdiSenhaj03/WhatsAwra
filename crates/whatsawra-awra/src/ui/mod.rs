@@ -32,6 +32,7 @@ mod polls;
 mod rows;
 mod search;
 mod settings;
+mod settings_more;
 mod shell;
 mod viewer;
 

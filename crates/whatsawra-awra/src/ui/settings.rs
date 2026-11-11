@@ -27,12 +27,19 @@ pub struct SettingsPage {
     account: awra::ActionRow,
     folder: awra::ActionRow,
     start_at_login: awra::ActionRow,
+    window: awra::Window,
+    app_lock: super::settings_more::AppLock,
+    privacy: super::settings_more::AccountPrivacy,
+    sounds: super::settings_more::Sounds,
+    profile: super::settings_more::Profile,
+    proxy: super::settings_more::TextSetting,
+    giphy: super::settings_more::TextSetting,
 }
 
 const THEMES: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
 
 impl SettingsPage {
-    pub fn build(driver: &Rc<Driver>, app: &App) -> Self {
+    pub fn build(driver: &Rc<Driver>, app: &App, window: &awra::Window) -> Self {
         let locale = app.locale;
         let t = |text: &'static str| gettext(locale, text).into_owned();
         let column = awra::Box::new(awra::Orientation::Vertical, 24);
@@ -122,6 +129,19 @@ impl SettingsPage {
             |app| app.settings.keep_chats_archived,
             |app, on| app.queue(Action::SetKeepChatsArchived(on)),
         ));
+        let giphy = super::settings_more::TextSetting::build(
+            driver,
+            locale,
+            &chats,
+            &t("GIPHY API key"),
+            &t("For GIF search. Create a free key at developers.giphy.com."),
+            "",
+            |app| app.settings.giphy_key.clone(),
+            |app, key| {
+                app.settings.giphy_key = key;
+                app.queue(Action::SettingsChanged);
+            },
+        );
 
         // Notifications
         let notifications = section(&column, &t("Notifications"));
@@ -158,6 +178,7 @@ impl SettingsPage {
                 app.queue(Action::SettingsChanged);
             },
         ));
+        let sounds = super::settings_more::Sounds::build(driver, locale, &notifications);
 
         // Privacy
         let privacy = section(&column, &t("Privacy"));
@@ -190,9 +211,50 @@ impl SettingsPage {
             &t("Show"),
             Action::ShowDialog(Dialog::BlockedContacts),
         ));
+        let app_lock = super::settings_more::AppLock::build(driver, locale, &privacy);
+
+        // Who sees what on WhatsApp, as the phone sets it.
+        let account_privacy = section(&column, &t("Account privacy"));
+        let privacy = super::settings_more::AccountPrivacy::build(driver, locale, &account_privacy);
 
         // System
         let system = section(&column, &t("System"));
+        // A closed Mac app stays in the Dock, so there the setting decides only
+        // the menu-bar item.
+        let (keep_title, keep_description) = if cfg!(target_os = "macos") {
+            (
+                t("Show in the menu bar"),
+                t("Closing the window keeps WhatsAwra in the Dock. Quit with Ctrl+Q."),
+            )
+        } else {
+            (
+                t("Keep running when the window closes"),
+                t("Quit from the tray or with Ctrl+Q."),
+            )
+        };
+        toggles.push(toggle(
+            driver,
+            &system,
+            &keep_title,
+            &keep_description,
+            |app| app.settings.keep_running_in_background,
+            |app, on| {
+                app.settings.keep_running_in_background = on;
+                app.queue(Action::SettingsChanged);
+            },
+        ));
+        let proxy = super::settings_more::TextSetting::build(
+            driver,
+            locale,
+            &system,
+            &t("Proxy"),
+            &t(
+                "socks5:// or http:// with host and port. Empty follows the system's proxy settings.",
+            ),
+            "socks5://127.0.0.1:1080",
+            |app| app.settings.proxy.clone(),
+            |app, proxy| app.queue(Action::SetProxy(proxy)),
+        );
         let start_at_login = awra::ActionRow::new(&t("Start at login"), "");
         let login_switch = awra::Switch::new();
         login_switch.set_valign(awra::Align::Center);
@@ -233,8 +295,9 @@ impl SettingsPage {
 
         // Account
         let account_section = section(&column, &t("Account"));
+        let profile = super::settings_more::Profile::build(driver, locale, &account_section);
         let account = awra::ActionRow::new("", "");
-        account_section.append(&account);
+        account.set_visible(false);
         let unlink = button_row(
             driver,
             &t("Unlink this computer"),
@@ -270,10 +333,23 @@ impl SettingsPage {
             account,
             folder,
             start_at_login,
+            window: window.clone(),
+            app_lock,
+            privacy,
+            sounds,
+            profile,
+            proxy,
+            giphy,
         }
     }
 
-    pub fn sync(&self, app: &App) {
+    pub fn sync(&mut self, app: &App) {
+        self.app_lock.sync(app, Some(&self.window));
+        self.privacy.sync(app);
+        self.sounds.sync(app);
+        self.profile.sync(app);
+        self.proxy.sync(app);
+        self.giphy.sync(app);
         for toggle in &self.toggles {
             let on = (toggle.get)(app);
             if toggle.switch.is_active() != on {

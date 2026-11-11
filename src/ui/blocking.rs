@@ -59,11 +59,13 @@ pub(super) fn button(app: &mut App, ui: &mut egui::Ui, chat: &str, stop: Stop) {
     }
 }
 
-fn hidden(app: &App, chat: &str) -> bool {
+/// Whether `chat` sits in the locked folder while it is closed.
+pub fn hidden(app: &App, chat: &str) -> bool {
     app.chat(chat).is_some_and(|chat| chat.locked) && !app.locked_folder_open()
 }
 
-fn name(app: &App, chat: &str) -> String {
+/// A blocked chat's name, or "Locked chat" while its folder is closed.
+pub fn name(app: &App, chat: &str) -> String {
     if hidden(app, chat) {
         gettext(app.locale, "Locked chat").into_owned()
     } else {

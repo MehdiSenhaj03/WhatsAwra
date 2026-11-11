@@ -67,6 +67,7 @@ impl Dialogs {
             .map(|chooser| Box::new(chooser) as Box<dyn Live>)
             .or_else(|| super::polls::dialog_of(driver, app, window, &dialog))
             .or_else(|| super::group::dialog_of(driver, app, window, &dialog))
+            .or_else(|| super::settings_more::dialog_of(driver, app, window, &dialog))
         {
             chooser.sync(driver, app);
             let shown = chooser.dialog();

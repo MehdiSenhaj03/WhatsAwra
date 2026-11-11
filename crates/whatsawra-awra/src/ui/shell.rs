@@ -215,7 +215,8 @@ impl Shell {
         split.set_end_pane_width(340);
         let search = super::search::SearchPane::build(driver, locale);
 
-        let settings = driver.read(|app| super::settings::SettingsPage::build(driver, app));
+        let settings =
+            driver.read(|app| super::settings::SettingsPage::build(driver, app, &window));
         let places = awra::Stack::new();
         places.set_transition_type(awra::StackTransitionType::Crossfade);
         places.set_hexpand(true);

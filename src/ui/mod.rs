@@ -2,7 +2,7 @@
 
 pub mod accounts;
 mod attachment_preview;
-mod blocking;
+pub mod blocking;
 pub mod call;
 pub mod calls;
 mod chat_export;
