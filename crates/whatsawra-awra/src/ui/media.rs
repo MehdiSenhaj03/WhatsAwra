@@ -33,6 +33,8 @@ pub enum MediaView {
         sticker: bool,
         /// A video's length, shown over its first frame.
         video: Option<String>,
+        /// A GIF (sent as a short clip): it moves under the pointer.
+        gif: bool,
         loading: bool,
         failed: Option<String>,
         /// The clip playing in the bubble, when it is this one.
@@ -135,6 +137,7 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
             height,
             sticker,
             video,
+            gif: false,
             loading,
             failed: failed.clone(),
             playing,
@@ -143,10 +146,16 @@ pub fn view_of(app: &App, message: &Message) -> Option<(MediaView, bool)> {
     let view = match &message.content {
         Content::Image { .. } => picture(false, None),
         Content::Sticker { .. } => picture(true, None),
-        Content::Video { seconds, .. } => picture(
-            false,
-            Some(seconds.map(whatsawra::util::duration).unwrap_or_default()),
-        ),
+        Content::Video { seconds, gif, .. } => {
+            let mut view = picture(
+                false,
+                Some(seconds.map(whatsawra::util::duration).unwrap_or_default()),
+            );
+            if let MediaView::Picture { gif: moving, .. } = &mut view {
+                *moving = *gif;
+            }
+            view
+        }
         Content::Audio {
             seconds, waveform, ..
         } => {
@@ -256,6 +265,40 @@ impl MediaWidgets {
         overlay.add_overlay(&sound);
         root.append(&overlay);
         click(&picture, driver, &shown);
+        // A GIF plays while the pointer is over it, and rests on its poster.
+        let hover = awra::EventControllerMotion::new();
+        let playing: Rc<RefCell<Option<Rc<std::cell::Cell<bool>>>>> = Rc::default();
+        let (image, poster, now) = (picture.clone(), shown.clone(), playing.clone());
+        hover.connect_enter(move |_, _, _| {
+            if let Some((
+                _,
+                MediaView::Picture {
+                    path: Some(path),
+                    gif: true,
+                    ..
+                },
+            )) = poster.borrow().clone()
+                && let Some(old) = now.replace(Some(super::motion::play(&image, path)))
+            {
+                old.set(true);
+            }
+        });
+        let (image, poster) = (picture.clone(), shown.clone());
+        hover.connect_leave(move |_| {
+            if let Some(stop) = playing.take() {
+                stop.set(true);
+                if let Some((
+                    _,
+                    MediaView::Picture {
+                        path: Some(path), ..
+                    },
+                )) = poster.borrow().clone()
+                {
+                    image.set_texture(pictures::photo(&path).as_ref());
+                }
+            }
+        });
+        picture.add_controller(hover);
 
         let voice = awra::Box::new(awra::Orientation::Horizontal, 8);
         let play = awra::Button::from_icon_name("media-playback-start-symbolic");
@@ -376,6 +419,7 @@ impl MediaWidgets {
                 height,
                 sticker,
                 video,
+                gif,
                 loading,
                 failed,
                 playing,
@@ -425,6 +469,8 @@ impl MediaWidgets {
                     "⭳ …".to_owned()
                 } else if path.is_none() && !sticker {
                     "⭳".to_owned()
+                } else if *gif {
+                    "GIF".to_owned()
                 } else if let Some(length) = video {
                     format!("▶ {length}")
                 } else {

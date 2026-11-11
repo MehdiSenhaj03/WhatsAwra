@@ -435,6 +435,17 @@ fn ffmpeg_present() -> bool {
 }
 
 /// Decodes up to `limit` frames.
+/// Up to `limit` frames of the picture, sticker or clip at `path` (all of an
+/// animation when it has no more than [`MAX_FRAMES`]), with how long each
+/// shows, for a frontend that draws them itself. It decodes on the calling
+/// thread, so call it off the interface's.
+pub fn decode_frames(path: &Path, limit: usize) -> Option<Vec<(ColorImage, Duration)>> {
+    std::panic::catch_unwind(|| decode(path, limit.min(MAX_FRAMES)))
+        .ok()
+        .flatten()
+        .map(|decoded| decoded.frames)
+}
+
 fn decode(path: &Path, limit: usize) -> Option<Decoded> {
     let extension = path
         .extension()

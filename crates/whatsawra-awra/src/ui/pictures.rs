@@ -117,14 +117,31 @@ fn load(path: &Path, side: u32) -> Option<awra::Texture> {
     })
 }
 
+/// A clip's picture (a video, a GIF sent as one): a frame about a second
+/// in, since openings are often black, or its last when it is shorter.
+fn poster(path: &Path) -> Option<image::DynamicImage> {
+    let (frame, _) = whatsawra::animation::decode_frames(path, 25)?.pop()?;
+    color_image(&frame).map(image::DynamicImage::ImageRgba8)
+}
+
+/// An egui picture as straight-alpha RGBA.
+pub fn color_image(frame: &egui::ColorImage) -> Option<image::RgbaImage> {
+    let [width, height] = frame.size;
+    let rgba = frame
+        .pixels
+        .iter()
+        .flat_map(|pixel| pixel.to_srgba_unmultiplied())
+        .collect();
+    image::RgbaImage::from_raw(width as u32, height as u32, rgba)
+}
+
 /// Reads and scales a picture to straight-alpha RGBA.
 fn decode(path: &Path, side: u32) -> Option<(Vec<u8>, u32, u32)> {
     let image = image::ImageReader::open(path)
-        .ok()?
-        .with_guessed_format()
-        .ok()?
-        .decode()
-        .ok()?;
+        .ok()
+        .and_then(|reader| reader.with_guessed_format().ok())
+        .and_then(|reader| reader.decode().ok())
+        .or_else(|| poster(path))?;
     let image = if image.width().max(image.height()) > side {
         image.thumbnail(side, side)
     } else {
@@ -133,4 +150,20 @@ fn decode(path: &Path, side: u32) -> Option<(Vec<u8>, u32, u32)> {
     let rgba = image.into_rgba8();
     let (width, height) = rgba.dimensions();
     Some((rgba.into_raw(), width, height))
+}
+
+#[cfg(all(test, feature = "demo"))]
+mod tests {
+    #[test]
+    fn a_clip_has_a_poster() {
+        let dir = std::env::temp_dir().join("whatsawra-awra-poster-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("clip.mp4");
+        std::fs::write(&path, whatsawra::demo::stock::VIDEO).unwrap();
+        let started = std::time::Instant::now();
+        let poster = super::decode(&path, super::PHOTO_SIDE);
+        eprintln!("poster in {:?}", started.elapsed());
+        assert!(poster.is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

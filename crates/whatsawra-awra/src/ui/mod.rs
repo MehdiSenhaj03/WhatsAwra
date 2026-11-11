@@ -26,6 +26,7 @@ mod lock;
 mod login;
 mod media;
 mod menus;
+mod motion;
 mod picker;
 mod pictures;
 mod polls;
