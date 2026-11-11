@@ -18968,7 +18968,7 @@ mod tests {
         let ctx = egui::Context::default();
         app.update = Some(crate::updates::Release {
             version: "99.0.0".into(),
-            url: "https://github.com/crmne/whatsawra/releases/latest".into(),
+            url: "https://github.com/MehdiSenhaj03/WhatsAwra/releases/latest".into(),
         });
         app.update_support = Some(Err("Use your package manager".into()));
         app.settings.download_updates_automatically = true;

@@ -313,7 +313,7 @@ release's SHA-256 checksums, whose manifest must carry a valid Ed25519
 publisher signature; a missing or invalid signature stops the update. The
 updater keeps a backup and restores it if the new version cannot start.
 Release builds also carry GitHub provenance attestations
-(`gh attestation verify FILE -R crmne/whatsawra`).
+(`gh attestation verify FILE -R MehdiSenhaj03/WhatsAwra`).
 
 The in-app updater handles portable downloads (keep `whatsawra-portable.txt`
 beside the executable), the Windows installer, and the macOS app in

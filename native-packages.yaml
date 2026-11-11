@@ -153,7 +153,7 @@ targets:
       local: dist/whatsawra-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
       release_asset: whatsawra-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
 release:
-  repository: crmne/whatsawra
+  repository: MehdiSenhaj03/WhatsAwra
   checksums: checksums.txt
   prereleases: true
 assets:
@@ -168,7 +168,7 @@ assets:
     local: dist/whatsawra-v@VERSION@-macos-universal.dmg
   SOURCE:
     file: whatsawra-@VERSION@.tar.gz
-    url: https://github.com/crmne/whatsawra/archive/refs/tags/v@VERSION@.tar.gz
+    url: https://github.com/MehdiSenhaj03/WhatsAwra/archive/refs/tags/v@VERSION@.tar.gz
     checksummed: false
     local: dist/whatsawra-@VERSION@.tar.gz
 templates:

@@ -38,8 +38,8 @@
     <Icon Id="WhatsAwraIcon" SourceFile="$(sys.SOURCEFILEDIR)whatsawra.ico" />
     <Property Id="ARPPRODUCTICON" Value="WhatsAwraIcon" />
     <Property Id="ARPURLINFOABOUT" Value="https://whatsawra.rocks" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/crmne/whatsawra/issues" />
-    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/crmne/whatsawra/releases" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/MehdiSenhaj03/WhatsAwra/issues" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/MehdiSenhaj03/WhatsAwra/releases" />
     <Property Id="ARPCOMMENTS" Value="© 2026 Carmine Paolino. MIT License. Not affiliated with WhatsApp or Meta." />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPNOREPAIR" Value="1" />

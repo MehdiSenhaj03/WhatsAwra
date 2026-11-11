@@ -5,12 +5,12 @@ PackageVersion: @VERSION@
 PackageLocale: en-US
 Publisher: Carmine Paolino
 PublisherUrl: https://paolino.me/
-PublisherSupportUrl: https://github.com/crmne/whatsawra/issues
+PublisherSupportUrl: https://github.com/MehdiSenhaj03/WhatsAwra/issues
 Author: Carmine Paolino
 PackageName: WhatsAwra
 PackageUrl: https://whatsawra.rocks/
 License: MIT
-LicenseUrl: https://github.com/crmne/whatsawra/blob/v@VERSION@/LICENSE
+LicenseUrl: https://github.com/MehdiSenhaj03/WhatsAwra/blob/v@VERSION@/LICENSE
 Copyright: Copyright (c) 2026 Carmine Paolino
 ShortDescription: A fast, lightweight, native WhatsApp client
 Description: |-
@@ -24,7 +24,7 @@ Tags:
 - messenger
 - whatsapp
 - whatsapp-client
-ReleaseNotesUrl: https://github.com/crmne/whatsawra/releases/tag/v@VERSION@
+ReleaseNotesUrl: https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v@VERSION@
 Documentations:
 - DocumentLabel: Getting Started
   DocumentUrl: https://whatsawra.rocks/getting-started/

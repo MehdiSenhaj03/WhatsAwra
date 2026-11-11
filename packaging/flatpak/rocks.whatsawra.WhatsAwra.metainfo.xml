@@ -18,13 +18,13 @@
   </description>
   <launchable type="desktop-id">rocks.whatsawra.WhatsAwra.desktop</launchable>
   <url type="homepage">https://whatsawra.rocks/</url>
-  <url type="bugtracker">https://github.com/crmne/whatsawra/issues</url>
+  <url type="bugtracker">https://github.com/MehdiSenhaj03/WhatsAwra/issues</url>
   <url type="help">https://whatsawra.rocks/getting-started/</url>
-  <url type="vcs-browser">https://github.com/crmne/whatsawra</url>
+  <url type="vcs-browser">https://github.com/MehdiSenhaj03/WhatsAwra</url>
   <screenshots>
     <screenshot type="default">
       <caption>A conversation with pictures, voice messages and replies</caption>
-      <image>https://raw.githubusercontent.com/crmne/whatsawra/main/docs/screenshot.png</image>
+      <image>https://raw.githubusercontent.com/MehdiSenhaj03/WhatsAwra/main/docs/screenshot.png</image>
     </screenshot>
   </screenshots>
   <content_rating type="oars-1.1"><content_attribute id="social-chat">intense</content_attribute></content_rating>
@@ -38,49 +38,49 @@
   </supports>
   <releases>
     <release version="0.21.1" date="2026-11-03">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.21.1</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.21.1</url>
     </release>
     <release version="0.21.0" date="2026-11-01">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.21.0</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.21.0</url>
     </release>
     <release version="0.20.1" date="2026-10-24">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.20.1</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.20.1</url>
     </release>
     <release version="0.20.0" date="2026-10-23">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.20.0</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.20.0</url>
     </release>
     <release version="0.19.0" date="2026-10-03">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.19.0</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.19.0</url>
     </release>
     <release version="0.18.2" date="2026-09-30">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.18.2</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.18.2</url>
     </release>
     <release version="0.18.1" date="2026-09-30">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.18.1</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.18.1</url>
     </release>
     <release version="0.17.0" date="2026-09-26">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.17.0</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.17.0</url>
     </release>
     <release version="0.16.5" date="2026-09-25">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.16.5</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.16.5</url>
     </release>
     <release version="0.16.4" date="2026-09-25">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.16.4</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.16.4</url>
     </release>
     <release version="0.16.3" date="2026-09-25">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.16.3</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.16.3</url>
     </release>
     <release version="0.16.2" date="2026-09-24">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.16.2</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.16.2</url>
     </release>
     <release version="0.16.1" date="2026-09-24">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.16.1</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.16.1</url>
     </release>
     <release version="0.16.0" date="2026-09-24">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.16.0</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.16.0</url>
     </release>
     <release version="0.13.1" date="2026-09-14">
-      <url>https://github.com/crmne/whatsawra/releases/tag/v0.13.1</url>
+      <url>https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v0.13.1</url>
     </release>
   </releases>
 </component>

@@ -58,7 +58,7 @@ RAM, compared with 1.13 GB for WhatsApp Web and its Chromium processes.
 
 These are current implementation limits, not permanent product exclusions.
 Feature requests can be discussed within the project's
-[product boundaries](https://github.com/crmne/whatsawra/blob/main/CONTRIBUTING.md#before-opening-an-issue).
+[product boundaries](https://github.com/MehdiSenhaj03/WhatsAwra/blob/main/CONTRIBUTING.md#before-opening-an-issue).
 WhatsAwra does not currently support:
 
 - Creating call links and screen sharing; status posts, communities and
@@ -76,7 +76,7 @@ copy. Syncing these deletions with the phone and other linked devices is now
 implemented on main, but has not yet been released. See
 [deletion behavior](/using-whatsawra/#writing).
 
-When reporting [an issue](https://github.com/crmne/whatsawra/issues), include
+When reporting [an issue](https://github.com/MehdiSenhaj03/WhatsAwra/issues), include
 what happened, what you expected, and when it happened. This helps match the
 problem to the log in the state directory.
 

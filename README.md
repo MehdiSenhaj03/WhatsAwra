@@ -96,7 +96,7 @@ The complete guide lives at **[whatsawra.rocks](https://whatsawra.rocks/)**.
 | Make your own theme | [Making a theme](https://whatsawra.rocks/themes/) |
 | Understand what stays on this computer | [How it links](https://whatsawra.rocks/how-it-links/) |
 | Understand account risk | [Account safety](https://whatsawra.rocks/what-is-whatsawra/#account-safety) |
-| Report a bug or propose a feature | Read [Contributing](CONTRIBUTING.md), then use the [issue forms](https://github.com/crmne/whatsawra/issues/new/choose). |
+| Report a bug or propose a feature | Read [Contributing](CONTRIBUTING.md), then use the [issue forms](https://github.com/MehdiSenhaj03/WhatsAwra/issues/new/choose). |
 
 ## Contributing
 
@@ -143,7 +143,7 @@ Licensed under the [MIT License](LICENSE).
 
 <a href="https://www.star-history.com/?repos=crmne%2Fwhatsawra&amp;type=date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=crmne/whatsawra&amp;type=date&amp;theme=dark">
-    <img alt="WhatsAwra GitHub stars over time" src="https://api.star-history.com/chart?repos=crmne/whatsawra&amp;type=date">
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MehdiSenhaj03/WhatsAwra&amp;type=date&amp;theme=dark">
+    <img alt="WhatsAwra GitHub stars over time" src="https://api.star-history.com/chart?repos=MehdiSenhaj03/WhatsAwra&amp;type=date">
   </picture>
 </a>

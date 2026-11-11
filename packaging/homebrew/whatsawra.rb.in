@@ -2,7 +2,7 @@ cask "whatsawra" do
   version "@VERSION@"
   sha256 "@MACOS_SHA256@"
 
-  url "https://github.com/crmne/whatsawra/releases/download/v#{version}/whatsawra-v#{version}-macos-universal.dmg"
+  url "https://github.com/MehdiSenhaj03/WhatsAwra/releases/download/v#{version}/whatsawra-v#{version}-macos-universal.dmg"
   name "WhatsAwra"
   desc "Native WhatsApp client"
   homepage "https://whatsawra.rocks"

@@ -14,7 +14,7 @@ Linux DEB/RPM packages and a recipe archive. Automatic AUR publication requires
 its configured repository variable and secrets. PRs only validate recipes.
 
 Native bundle contents, signing and installer settings remain application-specific.
-See the repository's [maintainer packaging guide](https://github.com/crmne/whatsawra/blob/main/PACKAGING.md)
+See the repository's [maintainer packaging guide](https://github.com/MehdiSenhaj03/WhatsAwra/blob/main/PACKAGING.md)
 for commands and the shared tool's [platform coverage](https://github.com/crmne/native-packages/blob/main/docs/platforms.md)
 for the boundaries.
 

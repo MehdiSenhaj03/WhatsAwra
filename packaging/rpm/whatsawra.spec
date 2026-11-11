@@ -8,7 +8,7 @@ Release:        1%{?dist}
 Summary:        Fast native WhatsApp client
 License:        MIT
 URL:            https://whatsawra.rocks
-Source0:        https://github.com/crmne/whatsawra/archive/refs/tags/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
+Source0:        https://github.com/MehdiSenhaj03/WhatsAwra/archive/refs/tags/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
 
 # ring compiles its own C, and LTO objects in its archive leave the link
 # without ring_core_* symbols, as on Arch.
@@ -75,4 +75,4 @@ install -Dm755 contrib/omarchy/whatsawra-theme %{buildroot}%{_datadir}/whatsawra
 
 %changelog
 * @DATE@ Carmine Paolino <carmine@paolino.me> - @VERSION@-1
-- WhatsAwra @VERSION@: https://github.com/crmne/whatsawra/releases/tag/v@VERSION@
+- WhatsAwra @VERSION@: https://github.com/MehdiSenhaj03/WhatsAwra/releases/tag/v@VERSION@

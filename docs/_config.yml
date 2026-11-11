@@ -60,7 +60,7 @@ jekyll_vitepress:
       name: Carmine Paolino
       url: https://paolino.me
       same_as:
-        - https://github.com/crmne/whatsawra
+        - https://github.com/MehdiSenhaj03/WhatsAwra
   llms:
     title: WhatsAwra
     description: >-
@@ -70,7 +70,7 @@ jekyll_vitepress:
     details: >-
       Covers installation, phone linking, everyday use, settings, and the
       WhatsApp connection. Source is on
-      [GitHub](https://github.com/crmne/whatsawra).
+      [GitHub](https://github.com/MehdiSenhaj03/WhatsAwra).
   branding:
     site_title: WhatsAwra
     logo:
@@ -96,11 +96,11 @@ jekyll_vitepress:
     format: "%Y-%m-%d %H:%M"
   edit_link:
     enabled: true
-    pattern: "https://github.com/crmne/whatsawra/edit/main/docs/:path"
+    pattern: "https://github.com/MehdiSenhaj03/WhatsAwra/edit/main/docs/:path"
     text: Edit this page on GitHub
   github_star:
     enabled: true
-    repository: crmne/whatsawra
+    repository: MehdiSenhaj03/WhatsAwra
     text: Star
     show_count: true
   github_sponsor:

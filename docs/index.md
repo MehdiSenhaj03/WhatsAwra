@@ -16,7 +16,7 @@ hero:
       link: /what-is-whatsawra/
     - theme: alt
       text: GitHub
-      link: https://github.com/crmne/whatsawra
+      link: https://github.com/MehdiSenhaj03/WhatsAwra
   image:
     dark: /screenshot.png
     light: /screenshot-light.png
@@ -54,7 +54,7 @@ features:
   - icon: 🔓
     title: Open source
     details: MIT-licensed Rust that links through whatsapp-rust. The linking process is documented.
-    link: https://github.com/crmne/whatsawra
+    link: https://github.com/MehdiSenhaj03/WhatsAwra
     link_text: Read the source
 ---
 

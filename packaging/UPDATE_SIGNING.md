@@ -27,7 +27,7 @@ See the [shared signing guide](https://github.com/crmne/native-packages/blob/dc0
 Build jobs also publish GitHub artifact attestations. These identify the
 repository, workflow and commit that built each file; they do not replace the
 updater's publisher-signature check or prove the source is safe. Consumers can
-run `gh attestation verify FILE -R crmne/whatsawra`. See
+run `gh attestation verify FILE -R MehdiSenhaj03/WhatsAwra`. See
 [GitHub's attestation documentation](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations).
 
 ## Key custody and rotation

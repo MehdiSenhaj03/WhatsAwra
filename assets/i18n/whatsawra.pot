@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: WhatsAwra\n"
-"Report-Msgid-Bugs-To: https://github.com/crmne/whatsawra/issues/new?"
+"Report-Msgid-Bugs-To: https://github.com/MehdiSenhaj03/WhatsAwra/issues/new?"
 "template=translation.yml\n"
 "POT-Creation-Date: 2026-11-01 20:11+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"

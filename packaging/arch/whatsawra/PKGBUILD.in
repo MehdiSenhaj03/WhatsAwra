@@ -20,7 +20,7 @@ conflicts=('whatsawra-bin' 'whatsawra-git')
 # undefined ring_core_* symbols. The stable package is prebuilt and never
 # meets this.
 options=('!debug' '!lto')
-source=("${pkgname}-${pkgver}.tar.gz::https://github.com/crmne/whatsawra/archive/refs/tags/v${pkgver}.tar.gz")
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/MehdiSenhaj03/WhatsAwra/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('@SOURCE_SHA256@')
 
 prepare() {

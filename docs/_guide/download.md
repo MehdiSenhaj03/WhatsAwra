@@ -7,11 +7,11 @@ nav_order: 1
 {% assign v = site.whatsawra_version %}
 {% assign name = site.release_asset_prefix %}
 {% assign app = site.release_app_name %}
-{% assign base = "https://github.com/crmne/whatsawra/releases/download/v" | append: v %}
+{% assign base = "https://github.com/MehdiSenhaj03/WhatsAwra/releases/download/v" | append: v %}
 
 The current version is **v{{ v }}**. SHA-256 checksums are in
 [checksums.txt]({{ base }}/checksums.txt). Older versions are on the
-[releases page](https://github.com/crmne/whatsawra/releases).
+[releases page](https://github.com/MehdiSenhaj03/WhatsAwra/releases).
 
 ## Linux
 
@@ -27,7 +27,7 @@ yay -S {{ name }}-git    # builds from the latest commit
 With [Nix](https://nixos.org), install from the flake:
 
 ```sh
-nix profile install github:crmne/whatsawra
+nix profile install github:MehdiSenhaj03/WhatsAwra
 ```
 
 NixOS configurations can add the repository as a flake input and include

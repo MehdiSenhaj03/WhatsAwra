@@ -759,7 +759,7 @@ A release is not finished when the tag is pushed. Do these in order:
    `packaging/release-notes/vX.Y.Z.md`: the release workflow publishes that
    file as the release description, and a stable tag without it fails. Link
    screenshots at the release's asset URLs
-   (`https://github.com/crmne/whatsawra/releases/download/vX.Y.Z/NAME.png`).
+   (`https://github.com/MehdiSenhaj03/WhatsAwra/releases/download/vX.Y.Z/NAME.png`).
    Run the full checks, commit, and push `main`. Before tagging, verify the
    release commit is reachable from `origin/main` so the binaries report the
    right version and the release contains the canonical history.

@@ -666,6 +666,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "awra"
+version = "2.0.0"
+dependencies = [
+ "awra-sys",
+]
+
+[[package]]
+name = "awra-sys"
+version = "2.0.0"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8379,6 +8393,7 @@ dependencies = [
  "apple-native-keyring-store",
  "arboard",
  "async-channel",
+ "awra",
  "base64 0.23.1",
  "cbc",
  "clap",

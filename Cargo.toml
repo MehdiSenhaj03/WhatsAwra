@@ -6,7 +6,7 @@ rust-version = "1.98"
 license = "MIT"
 description = "A native WhatsApp client built with Rust and egui"
 homepage = "https://whatsawra.rocks"
-repository = "https://github.com/crmne/whatsawra"
+repository = "https://github.com/MehdiSenhaj03/WhatsAwra"
 keywords = ["whatsapp", "chat", "egui", "messaging"]
 categories = ["gui"]
 
@@ -17,6 +17,14 @@ path = "src/lib.rs"
 [[bin]]
 name = "whatsawra"
 path = "src/main.rs"
+
+# The Awra frontend: the same core (accounts, backend, archive) drawn with
+# Awra's frosted-glass components instead of egui. The port lands screen by
+# screen until it replaces the egui window.
+[[bin]]
+name = "whatsawra-awra"
+path = "src/bin/whatsawra-awra.rs"
+required-features = ["awra-ui"]
 
 [dependencies]
 anyhow = "1"
@@ -162,6 +170,9 @@ webp-animation = "0.10"
 # Encodes stickers made from pictures as still lossy WebP. Already included
 # through webp-animation, whose animation encoder always writes an animation.
 libwebp-sys2 = { version = "0.2", features = ["1_2"] }
+# Awra 2, the frosted-glass UI framework the Awra frontend is drawn with. A
+# sibling checkout while the port and the components it needs land together.
+awra = { path = "../Awra/bindings/rust/awra", optional = true }
 # Shared foundation of Carmine's egui apps (github.com/crmne/fastframe). Every
 # crate comes from the same revision.
 # Bundled gettext catalogs: lookups and system language detection.
@@ -218,7 +229,7 @@ fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.16.1"
 
 [patch.crates-io]
 # crmne/egui apps-0.36.2, shared with Spotifast, RekordFlash and TonePush: egui
-# 0.36.2 with right-to-left shaping and glyph clusters from crmne/whatsawra#144
+# 0.36.2 with right-to-left shaping and glyph clusters from MehdiSenhaj03/WhatsAwra#144
 # and digits shaped left to right in text without right-to-left letters (#184)
 # (emilk/egui#8577), egui's busy-loop fix (emilk/egui#8398), and eframe pacing
 # Wayland frames by the compositor's frame callbacks so a window the
@@ -331,6 +342,8 @@ harness = false
 [features]
 # Sample data, layout tests, and screenshots. Not used in release builds.
 demo = []
+# The Awra frontend (`whatsawra-awra`).
+awra-ui = ["dep:awra"]
 
 [profile.release]
 lto = "thin"

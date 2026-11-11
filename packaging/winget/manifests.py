@@ -17,7 +17,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-REPOSITORY = "crmne/whatsawra"
+REPOSITORY = "MehdiSenhaj03/WhatsAwra"
 HERE = Path(__file__).resolve().parent
 TEMPLATES = sorted(HERE.glob("*.yaml.in"))
 INSTALLERS = {

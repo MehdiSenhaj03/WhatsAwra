@@ -5,7 +5,7 @@ it pins the shared CLI and nFPM versions and declares Linux amd64/arm64 inputs,
 DEB/RPM/AppImage contents, dependencies, recipe templates and downstream repositories.
 Application assets and native recipes stay in `packaging/`.
 
-The GitHub repository is `crmne/whatsawra`, so source archives extract into
+The GitHub repository is `MehdiSenhaj03/WhatsAwra`, so source archives extract into
 `whatsawra-VERSION`.
 
 ```sh

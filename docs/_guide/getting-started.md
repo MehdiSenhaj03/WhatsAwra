@@ -12,7 +12,7 @@ macOS, and Windows.
 Or build from source with a recent stable [Rust](https://rustup.rs):
 
 ```sh
-git clone https://github.com/crmne/whatsawra whatsawra
+git clone https://github.com/MehdiSenhaj03/WhatsAwra whatsawra
 cd whatsawra
 cargo install --path .
 whatsawra

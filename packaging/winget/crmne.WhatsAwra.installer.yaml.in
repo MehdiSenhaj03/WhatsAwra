@@ -13,10 +13,10 @@ AppsAndFeaturesEntries:
 - UpgradeCode: '{AC7FEAEC-54FA-4A71-95A5-532EE484B6A9}'
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/crmne/whatsawra/releases/download/v@VERSION@/whatsawra-v@VERSION@-x86_64-pc-windows-msvc.msi
+  InstallerUrl: https://github.com/MehdiSenhaj03/WhatsAwra/releases/download/v@VERSION@/whatsawra-v@VERSION@-x86_64-pc-windows-msvc.msi
   InstallerSha256: @X64_SHA256@
 - Architecture: arm64
-  InstallerUrl: https://github.com/crmne/whatsawra/releases/download/v@VERSION@/whatsawra-v@VERSION@-aarch64-pc-windows-msvc.msi
+  InstallerUrl: https://github.com/MehdiSenhaj03/WhatsAwra/releases/download/v@VERSION@/whatsawra-v@VERSION@-aarch64-pc-windows-msvc.msi
   InstallerSha256: @ARM64_SHA256@
 ManifestType: installer
 ManifestVersion: 1.12.0
