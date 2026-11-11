@@ -11,6 +11,7 @@
 //! `request_repaint_after`), which here has no window: its repaint callback
 //! wakes Awra's loop instead.
 
+mod call;
 mod calls;
 mod chat_list;
 mod conversation;

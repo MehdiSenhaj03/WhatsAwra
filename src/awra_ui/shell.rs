@@ -22,11 +22,13 @@ pub struct Shell {
     pages: awra::Stack,
     login: Login,
     lock: super::lock::LockScreen,
+    call: super::call::CallScreen,
     rail: Rail,
     chats: ChatList,
     conversation: ConversationPane,
     /// What the area beside the rail shows: the chats or a page.
     places: awra::Stack,
+    call_banner: awra::StatusBanner,
     settings: super::settings::SettingsPage,
     /// The list beside the open chat: the chats, or the call history.
     lists: awra::Stack,
@@ -171,12 +173,29 @@ impl Shell {
         let places = awra::Stack::new();
         places.set_transition_type(awra::StackTransitionType::Crossfade);
         places.set_hexpand(true);
+        places.set_vexpand(true);
         places.add_named(&split, Some("chats"));
         places.add_named(&settings.root, Some("settings"));
 
         let main = awra::Box::new(awra::Orientation::Horizontal, 0);
         main.append(&rail.rail);
-        main.append(&places);
+        // A call left for the chats: the way back to it, above them.
+        let call_banner = awra::StatusBanner::new();
+        call_banner.set_appearance(awra::StatusAppearance::Success);
+        call_banner.set_dismissible(false);
+        let back = awra::Button::with_label(gettext(locale, "Return to the call").as_ref());
+        let weak = Rc::downgrade(driver);
+        back.connect_clicked(move |_| {
+            if let Some(driver) = weak.upgrade() {
+                driver.act(Action::ReturnToCall);
+            }
+        });
+        call_banner.set_action(Some(&back));
+        let beside = awra::Box::new(awra::Orientation::Vertical, 0);
+        beside.set_hexpand(true);
+        beside.append(&call_banner);
+        beside.append(&places);
+        main.append(&beside);
 
         let pages = awra::Stack::new();
         pages.set_transition_type(awra::StackTransitionType::Crossfade);
@@ -184,6 +203,8 @@ impl Shell {
         pages.add_named(&main, Some("main"));
         let lock = super::lock::LockScreen::build(driver, locale);
         pages.add_named(&lock.root, Some("lock"));
+        let call = super::call::CallScreen::build(driver, locale);
+        pages.add_named(&call.root, Some("call"));
 
         let toasts = awra::ToastOverlay::new();
         toasts.set_child(Some(&pages));
@@ -196,10 +217,12 @@ impl Shell {
             pages,
             login,
             lock,
+            call,
             rail,
             chats,
             conversation,
             places,
+            call_banner,
             settings,
             lists,
             calls,
@@ -215,8 +238,11 @@ impl Shell {
 
     pub fn sync(&mut self, driver: &Rc<Driver>, app: &App) {
         let locked = app.app_lock.is_locked();
+        let calling = !locked && self.call.sync(app);
         let page = if locked {
             "lock"
+        } else if calling {
+            "call"
         } else if app.is_linked() {
             "main"
         } else {
@@ -234,6 +260,14 @@ impl Shell {
         }
         if app.is_linked() {
             self.rail.sync(app);
+            let hidden_call = app.call.as_ref().filter(|_| app.call_surface_hidden);
+            self.call_banner.set_revealed(hidden_call.is_some());
+            if let Some(call) = hidden_call {
+                self.call_banner
+                    .set_title(Some(app.chat_title_of(&call.chat).as_str()));
+                self.call_banner
+                    .set_description(Some(crate::ui::call::status(app.locale, call).as_str()));
+            }
             let place = match app.page {
                 Page::Settings => "settings",
                 _ => "chats",
