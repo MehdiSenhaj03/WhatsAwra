@@ -195,6 +195,29 @@ impl Driver {
         });
     }
 
+    /// Carries out what the app asked of the window: quit (the tray's Quit,
+    /// Ctrl+Q), hide it (the tray), or show it again (the tray, a
+    /// notification, another launch).
+    fn follow_window(&self, app: &mut App) {
+        let Some(window) = self
+            .shell
+            .borrow()
+            .as_ref()
+            .map(|shell| shell.window.clone())
+        else {
+            return;
+        };
+        if app.quit_requested {
+            awra::quit();
+        } else if app.hide_intent {
+            app.window_gone();
+            window.hide();
+        } else if app.wants_show {
+            window.present();
+            app.frontend_window_shown();
+        }
+    }
+
     fn focused(&self) -> bool {
         self.shell
             .borrow()
@@ -227,10 +250,28 @@ impl Driver {
                 .run_ui(input, |ui| app.frontend_turn(ui.ctx(), focused));
             // Nothing paints the context, so its texture uploads go nowhere.
             output.textures_delta.clear();
+            // The app brings an open window forward (a second launch, a
+            // notification) by asking egui to focus it.
+            let raise = output.viewport_output.values().any(|viewport| {
+                viewport
+                    .commands
+                    .iter()
+                    .any(|command| matches!(command, egui::ViewportCommand::Focus))
+            });
+            if raise
+                && let Some(window) = self
+                    .shell
+                    .borrow()
+                    .as_ref()
+                    .map(|shell| shell.window.clone())
+            {
+                window.present();
+            }
             #[cfg(feature = "demo")]
             if self.demo.get() {
                 whatsawra::demo::tour::respond(&mut app);
             }
+            self.follow_window(&mut app);
         }
         let synced = Instant::now();
         self.sync();
@@ -301,6 +342,7 @@ pub fn run(app: App, options: Options) {
     *driver.shell.borrow_mut() = Some(shell);
     driver.turn();
     window.present();
+    driver.app.borrow_mut().frontend_window_shown();
     driver.app.borrow_mut().start_backends();
     // The keyboard starts in the search, not on the window's buttons.
     if let Some(shell) = driver.shell.borrow().as_ref() {
@@ -348,7 +390,16 @@ pub fn run(app: App, options: Options) {
             }
         }
         None => {
-            window.connect_close_request(|_| {
+            // With the tray (or the Dock), closing hides the window; else it quits.
+            let weak = Rc::downgrade(&driver);
+            window.connect_close_request(move |window| {
+                let hides = weak
+                    .upgrade()
+                    .is_some_and(|driver| driver.app.borrow_mut().frontend_close_hides());
+                if hides {
+                    window.hide();
+                    return awra::glib::Propagation::Stop;
+                }
                 awra::quit();
                 awra::glib::Propagation::Proceed
             });

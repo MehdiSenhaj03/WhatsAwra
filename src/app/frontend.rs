@@ -84,4 +84,29 @@ impl App {
         self.app_lock.note_input();
         self.note_keystroke();
     }
+
+    /// The window is on screen (made, or shown again from the tray): the
+    /// tray and the Dock take their clicks from now on, as `attach` has them.
+    pub fn frontend_window_shown(&mut self) {
+        self.window_hidden = false;
+        self.hide_intent = false;
+        self.wants_show = false;
+        self.tray_wait = None;
+        if let Some(dock) = &mut self.dock {
+            dock.attach();
+        }
+        if let Some(tray) = &mut self.tray {
+            tray.attach();
+        }
+    }
+
+    /// What a close of the window means: `true` hides it (the tray or the
+    /// Dock brings it back), `false` quits.
+    pub fn frontend_close_hides(&mut self) -> bool {
+        if self.quit_requested || !self.keeps_running_on_close() {
+            return false;
+        }
+        self.window_gone();
+        true
+    }
 }

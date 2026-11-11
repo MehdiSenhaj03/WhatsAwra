@@ -86,7 +86,7 @@ fn main() {
     let mut app = if demo {
         app::App::headless(dirs, settings).0
     } else {
-        match app::App::new(&waker, dirs, settings, app::AppOptions { tray: false }) {
+        match app::App::new(&waker, dirs, settings, app::AppOptions { tray: !demo }) {
             Ok(app) => app,
             Err(error) => {
                 eprintln!("WhatsAwra could not start: {error}");
