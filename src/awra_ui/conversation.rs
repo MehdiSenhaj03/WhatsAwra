@@ -55,6 +55,8 @@ struct Bubble {
     sender: Option<(String, String)>,
     /// The sender's picture beside the first of a run in a group, if any.
     face: Option<(String, Option<PathBuf>)>,
+    /// The first of a run from one sender, drawn with a tail.
+    tail: bool,
     /// Leaves room for a face that a later bubble of the run shows.
     indent: bool,
     quote: Option<(String, String)>,
@@ -73,7 +75,7 @@ struct RowWidgets {
     notice: awra::Label,
     line: awra::Box,
     face: awra::Avatar,
-    card: awra::Card,
+    card: awra::MessageBubble,
     sender: awra::Label,
     forwarded: awra::Label,
     quote: awra::Box,
@@ -529,6 +531,7 @@ fn items_of(app: &App, chat: &Chat, messages: &[Message]) -> Vec<Item> {
             id: message.id.clone(),
             from_me: message.from_me,
             sender,
+            tail: first_of_run,
             face,
             indent: group_incoming && !last_of_run,
             quote,
@@ -634,7 +637,7 @@ fn is_emoji_only(text: &str) -> bool {
 
 /// A sender's name colour, the same for them everywhere.
 fn sender_colour(id: &str) -> String {
-    let hue = crate::util::hue(id);
+    let hue = crate::util::hue(id) / 360.0;
     let (r, g, b) = hsl(hue, 0.55, 0.55);
     format!("#{r:02x}{g:02x}{b:02x}")
 }
@@ -681,8 +684,7 @@ fn row_widgets(driver: &std::rc::Weak<Driver>) -> (awra::Box, RowWidgets) {
     face.set_valign(awra::Align::End);
     line.append(&face);
 
-    let card = awra::Card::new();
-    card.set_content_inset(awra::Spacing::Sm);
+    let card = awra::MessageBubble::new();
     let content = awra::Box::new(awra::Orientation::Vertical, 2);
     let sender = awra::Label::new(None);
     sender.set_xalign(0.0);
@@ -797,11 +799,8 @@ fn bind_bubble(widgets: &RowWidgets, bubble: &Bubble) {
     };
     widgets.line.set_halign(align);
     widgets.reactions.set_halign(align);
-    widgets.card.set_appearance(if bubble.from_me {
-        awra::CardAppearance::Tinted
-    } else {
-        awra::CardAppearance::Raised
-    });
+    widgets.card.set_outgoing(bubble.from_me);
+    widgets.card.set_tail(bubble.tail);
     widgets
         .face
         .set_visible(bubble.face.is_some() || bubble.indent);
